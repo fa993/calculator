@@ -5,7 +5,7 @@
 #include <map>
 #include <string>
 
-class CalcVariable : protected CalcEntity
+class CalcVariable : public CalcEntity
 {
 private:
     /* data */

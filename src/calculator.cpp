@@ -3,25 +3,71 @@
 
 #include <iostream>
 #include "calcfunctionregistry.cpp"
+#include "calcvariable.cpp"
 
 class Calculator
 {
 private:
     /* data */
+
+    CalcFunctionRegistry *registry;
+
 public:
-    Calculator() {}
+    Calculator()
+    {
+        registry = new CalcFunctionRegistry;
+    }
 
     CalcEntity *parse(std::string &input)
     {
-        CalcFunction *f = nullptr;
+        CalcEntity *ans;
         int x = 0;
-        return parseInternal(input, &x, f);
+        CalcFunction *f = nullptr;
+        CalcEntity *rt;
+        while (x < input.size())
+        {
+            ans = parseInternal(input, &x, rt, f, nullptr);
+            rt = ans;
+        }
+        return ans;
     }
 
 private:
+    static bool isAlpha(unsigned char x)
+    {
+        return std::isalpha(x);
+    }
+
+    static bool isSpace(unsigned char x)
+    {
+        return std::isspace(x);
+    }
+
     CalcEntity *consumeEntityFromBuffer(std::string &buffer)
     {
-        CalcEntity *ret = new CalcEntity(std::stod(buffer));
+        bool b1 = std::find_if(buffer.cbegin(), buffer.cend(), Calculator::isSpace) != buffer.cend();
+        if (b1)
+        {
+            throw "Stray Whitespace";
+        }
+        bool b2 = std::find_if(buffer.cbegin(), buffer.cend(), Calculator::isAlpha) != buffer.cend();
+        CalcEntity *ret;
+        if (b2)
+        {
+            CalcEntity *r1 = registry->findFunction(buffer);
+            if (r1 == nullptr)
+            {
+                ret = new CalcVariable(buffer);
+            }
+            else
+            {
+                ret = r1;
+            }
+        }
+        else
+        {
+            ret = new CalcEntity(std::stod(buffer));
+        }
         buffer.clear();
         return ret;
     }
@@ -67,14 +113,17 @@ private:
             {
                 rootEntity = consumeEntityFromBuffer(buffer);
             }
+            else if (rootEntity == nullptr)
+            {
+                throw "Syntax Error";
+            }
         }
     }
 
-    CalcEntity *parseInternal(std::string &input, int *offset, CalcFunction *currentFunction)
+    CalcEntity *parseInternal(std::string &input, int *offset, CalcEntity *rootEntity, CalcFunction *currentFunction, bool *fromBracket)
     {
-        CalcEntity *rootEntity;
         std::string buffer;
-        CalcFunction *localVar;
+        CalcFunction *localVar = nullptr;
         for (; (*offset) < input.size(); (*offset)++)
         // for (std::string::const_iterator x = input.cbegin() + (*offset); x != input.end(); ++x, ++(*offset))
         {
@@ -106,18 +155,60 @@ private:
             else if (x == '(')
             {
                 //pass recursive call inside
-                
+                bool b = true;
+                CalcEntity *rt;
+                CalcFunction *pre;
+                bool x1 = !buffer.empty();
+                if (x1)
+                {
+                    pre = static_cast<CalcFunction *>(consumeEntityFromBuffer(buffer));
+                    if (currentFunction != nullptr)
+                    {
+                        currentFunction->pushArg(pre);
+                        rootEntity = currentFunction;
+                        currentFunction = nullptr;
+                    }
+                    else
+                    {
+                        rootEntity = pre;
+                    }
+                }
+                while (b)
+                {
+                    ++(*offset);
+                    rt = parseInternal(input, offset, nullptr, nullptr, &b);
+                    if(x1) {
+                        pre->pushArg(rt);
+                    }
+                }
+                if(!x1)
+                {
+                    if (currentFunction != nullptr)
+                    {
+                        currentFunction->pushArg(rt);
+                        rootEntity = currentFunction;
+                        currentFunction = nullptr;
+                    }
+                    else
+                    {
+                        rootEntity = rt;
+                    }
+                }
             }
             else if (x == ')')
             {
+                (*fromBracket) = false;
                 break;
             }
             else if (x == ',')
             {
+                //add(4, 5)
                 //pass recursive call inside
+                break;
             }
             else
             {
+                // std::cout << x << std::endl;
                 buffer.push_back(x);
                 continue;
             }
@@ -143,16 +234,16 @@ private:
                         //recurse
                         // parse()
                         //TODO
-                        ++(*offset);
                         localVar->pushArg(consumeEntityFromBuffer(buffer));
-                        CalcEntity *rt = parseInternal(input, offset, localVar);
+                        ++(*offset);
+                        CalcEntity *rt = parseInternal(input, offset, nullptr, localVar, fromBracket);
                         currentFunction->pushArg(rt);
                         rootEntity = currentFunction;
                         currentFunction = nullptr;
                     }
                     else if (f < 0)
                     {
-                        --(*offset);
+                        (*offset)--;
                         break;
                     }
                 }
