@@ -6,40 +6,40 @@
 #include <string>
 #include <vector>
 
-class CalcFunction : public CalcEntity {
+class CalcFunction : public CalcEntity
+{
 
 protected:
+    std::vector<CalcEntity *> arguments;
 
-    std::vector<CalcEntity*> arguments;
-
-public: 
-
-    void pushArg(CalcEntity* arg) {
+public:
+    void pushArg(CalcEntity *arg)
+    {
         arguments.push_back(arg);
     }
 
-    virtual int getArguementListLength() = 0; 
+    virtual int getArguementListLength() = 0;
 
-    virtual int getPriority() = 0;
+    virtual double getPriority() = 0;
 
-    double getValue() {
+    double getValue()
+    {
         throw "Unimplemented Error";
     }
-
 };
 
 class CalcStandardBinaryFunction : public CalcFunction
 {
 
 public:
-
     void simplify(std::map<std::string, double> &args)
     {
-        if(arguments.size() != 2) {
+        if (arguments.size() != getArguementListLength())
+        {
             throw "Incorrect length of arguement list";
         }
-        CalcEntity* arg1 = arguments.at(0);
-        CalcEntity* arg2 = arguments.at(1);
+        CalcEntity *arg1 = arguments.at(0);
+        CalcEntity *arg2 = arguments.at(1);
         arg1->simplify(args);
         arg2->simplify(args);
         bool x = arg1->isCompletelySimplified();
@@ -65,12 +65,49 @@ public:
         }
     }
 
-    int getArguementListLength() {
+    int getArguementListLength()
+    {
         return 2;
     }
 
     virtual double operate(double first, double second) = 0;
+};
 
+class CalcUnaryFunction : public CalcFunction
+{
+private:
+    /* data */
+public:
+    CalcUnaryFunction();
+
+    void simplify(std::map<std::string, double> &args)
+    {
+        if (arguments.size() != getArguementListLength())
+        {
+            throw "Incorrect length of arguement list";
+        }
+        CalcEntity *x1 = arguments[0];
+        x1->simplify(args);
+        if (x1->isCompletelySimplified())
+        {
+            
+            double v1 = x1->getValue();
+            result = operate(v1);
+            complete = true;
+            arguments.clear();
+        }
+        else
+        {
+            complete = false;
+        }
+    }
+
+    int getArguementListLength()
+    {
+        return 1;
+    }
+
+    virtual double operate(double first) = 0;
 };
 
 class CalcCustomBinaryFunction : public CalcStandardBinaryFunction
@@ -78,11 +115,62 @@ class CalcCustomBinaryFunction : public CalcStandardBinaryFunction
 private:
     /* data */
 public:
-
-    int getPriority() {
+    double getPriority()
+    {
         return 0;
     }
+};
 
+class CalcFunctionBus : public CalcFunction
+{
+private:
+    /* data */
+public:
+    CalcFunctionBus();
+
+    void simplify(std::map<std::string, double> &args)
+    {
+        bool all = true;
+        double aggregate = getInitialValue();
+        std::vector<CalcEntity *> parsedArgs;
+        for (int i = 0; i < arguments.size(); i++)
+        {
+            CalcEntity *x1 = arguments[i];
+            x1->simplify(args);
+            if (x1->isCompletelySimplified())
+            {
+                double v1 = x1->getValue();
+                arguments[i] = new CalcEntity(v1);
+                aggregate = operate(aggregate, v1);
+            }
+            else
+            {
+                all = false;
+                parsedArgs.push_back(x1);
+            }
+        }
+        arguments.clear();
+        if (all)
+        {
+            complete = true;
+            result = aggregate;
+        }
+        else
+        {
+            complete = false;
+            parsedArgs.push_back(new CalcEntity(aggregate));
+            arguments = parsedArgs;
+        }
+    }
+
+    int getArguementListLength()
+    {
+        throw "Unsupported Error";
+    }
+
+    virtual double getInitialValue() = 0;
+
+    virtual double operate(double first, double second) = 0;
 };
 
 #endif

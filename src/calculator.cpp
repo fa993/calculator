@@ -11,6 +11,7 @@ private:
     /* data */
 
     CalcFunctionRegistry *registry;
+    std::map<std::string, CalcVariable *> vars;
 
 public:
     Calculator()
@@ -43,6 +44,28 @@ private:
         return std::isspace(x);
     }
 
+    CalcVariable *putIfAbsent(char buffer, std::map<std::string, CalcVariable *> map)
+    {
+        std::string x1 = std::string(1, buffer);
+        return putIfAbsent(x1, map);
+    }
+
+    CalcVariable *putIfAbsent(std::string &buffer, std::map<std::string, CalcVariable *> map)
+    {
+        std::map<std::string, CalcVariable *>::iterator it = vars.find(buffer);
+        CalcVariable *ret;
+        if (it != vars.cend())
+        {
+            ret = it->second;
+        }
+        else
+        {
+            ret = new CalcVariable(buffer);
+            vars[buffer] = ret;
+        }
+        return ret;
+    }
+
     CalcEntity *consumeEntityFromBuffer(std::string &buffer)
     {
         bool b1 = std::find_if(buffer.cbegin(), buffer.cend(), Calculator::isSpace) != buffer.cend();
@@ -57,7 +80,27 @@ private:
             CalcEntity *r1 = registry->findFunction(buffer);
             if (r1 == nullptr)
             {
-                ret = new CalcVariable(buffer);
+                std::map<std::string, CalcVariable *>::iterator it = vars.find(buffer);
+                if (it != vars.cend())
+                {
+                    ret = it->second;
+                }
+                else
+                {
+                    ret = putIfAbsent(buffer[0], vars);
+                    //xyz
+                    //bit dirty but make multiplied element here
+                    if (buffer.size() > 1)
+                    {
+                        CalcFunction *fn = new CalcProductBus();
+                        fn->pushArg(ret);
+                        for (int f1 = 1; f1 < buffer.size(); f1++)
+                        {
+                            fn->pushArg(putIfAbsent(buffer[f1], vars));
+                        }
+                        ret = fn;
+                    }
+                }
             }
             else
             {
@@ -109,15 +152,184 @@ private:
         }
         else
         {
-            if (!buffer.empty())
+            resolvePreviousBuffer(rootEntity, buffer);
+        }
+    }
+
+    void resolvePreviousBufferV2(CalcEntity *&rootEntity, CalcFunction *&currentFunction, std::string &buffer)
+    {
+        if (currentFunction != nullptr)
+        {
+            //resolve previous buffer
+            currentFunction->pushArg(consumeEntityFromBuffer(buffer));
+            rootEntity = currentFunction;
+            currentFunction = nullptr;
+        }
+        else
+        {
+            resolvePreviousBuffer(rootEntity, buffer);
+        }
+    }
+
+    void resolvePreviousBuffer(CalcEntity *&rootEntity, std::string &buffer)
+    {
+        if (!buffer.empty())
+        {
+            rootEntity = consumeEntityFromBuffer(buffer);
+        }
+        else if (rootEntity == nullptr)
+        {
+            throw "Syntax Error";
+        }
+    }
+
+    void checkForInverse(CalcFunction *&wrapper, bool inverse, double proposedPriority)
+    {
+        if (inverse)
+        {
+            wrapper = registry->findInverse(proposedPriority);
+        }
+    }
+
+    CalcEntity *parseInternalV2(std::string &input, int *offset, bool inverse, CalcFunction *paritallyFilledBus, bool *fromBracket)
+    {
+        //new strategy... use function bus instead of reursive objects
+        std::string buffer;
+        CalcEntity *rootEntity = nullptr;
+        double proposedPriority = -1;
+        CalcFunction* wrapper;
+        for (; (*offset) < input.size(); (*offset)++)
+        // for (std::string::const_iterator x = input.cbegin() + (*offset); x != input.end(); ++x, ++(*offset))
+        {
+            char x = input[*offset];
+            if (x == ' ')
             {
-                rootEntity = consumeEntityFromBuffer(buffer);
+                //ignore
+                continue;
             }
-            else if (rootEntity == nullptr)
+            else if (x == '+')
             {
-                throw "Syntax Error";
+                proposedPriority = 2;
+                inverse = false;
+            }
+            else if (x == '-')
+            {
+                proposedPriority = 2;
+                inverse = true;
+            }
+            else if (x == '*')
+            {
+                proposedPriority = 1;
+                inverse = false;
+            }
+            else if (x == '/')
+            {
+                proposedPriority = 1;
+                inverse = true;
+            }
+            else if (x == '(')
+            {
+                //pass recursive call inside
+                bool b = true;
+                CalcEntity *rt;
+                CalcFunction *pre;
+                bool x1 = !buffer.empty();
+                if (x1)
+                {
+                    resolvePreviousBufferV2(rootEntity, wrapper, buffer);
+                    checkForInverse(wrapper, inverse, paritallyFilledBus->getPriority());
+                    pre = static_cast<CalcFunction *>(rootEntity);
+                    if (paritallyFilledBus != nullptr)
+                    {   
+                        paritallyFilledBus->pushArg(pre);
+                    }
+                    else
+                    {
+                        rootEntity = pre;
+                    }
+                }
+                while (b)
+                {
+                    ++(*offset);
+                    rt = parseInternalV2(input, offset, nullptr, nullptr, &b);
+                    if (x1)
+                    {
+                        pre->pushArg(rt);
+                    }
+                }
+                if (!x1)
+                {
+                    if (paritallyFilledBus != nullptr)
+                    {
+                        paritallyFilledBus->pushArg(rt);
+                        rootEntity = paritallyFilledBus;
+                    }
+                    else
+                    {
+                        rootEntity = rt;
+                    }
+                }
+            }
+            else if (x == ')')
+            {
+                (*fromBracket) = false;
+                break;
+            }
+            else if (x == ',')
+            {
+                //add(4, 5)
+                //pass recursive call inside
+                break;
+            }
+            else
+            {
+                // std::cout << x << std::endl;
+                buffer.push_back(x);
+                continue;
+            }
+            if (proposedPriority != -1)
+            {
+                if (paritallyFilledBus != nullptr)
+                {
+                    int f2 = proposedPriority - paritallyFilledBus->getPriority();
+                    if (f2 == 0)
+                    {
+                        resolvePreviousBufferV2(rootEntity, wrapper, buffer);
+                        checkForInverse(wrapper, inverse, proposedPriority);
+                        paritallyFilledBus->pushArg(rootEntity);
+                    }
+                    else if (f2 > 0)
+                    {
+                        (*offset)--;
+                        break;
+                    }
+                    else if (f2 < 0)
+                    {
+                        //recurse
+                        //3 + 2 * 4
+                        //3 - 2 / 5
+                        resolvePreviousBufferV2(rootEntity, wrapper, buffer);
+                        //checkForInverse(wrapper, inverse, proposedPriority);
+                        CalcFunction *newBus = registry->findBus(proposedPriority);
+                        newBus->pushArg(rootEntity);
+                        (*offset)++;
+                        rootEntity = parseInternalV2(input, offset, inverse, newBus, fromBracket);
+                        paritallyFilledBus->pushArg(rootEntity);
+                    }
+                }
+                else
+                {
+                    paritallyFilledBus = registry->findBus(proposedPriority);
+                    resolvePreviousBufferV2(rootEntity, wrapper, buffer);
+                    checkForInverse(wrapper, inverse, proposedPriority);
+                    paritallyFilledBus->pushArg(rootEntity);
+                }
+                proposedPriority = -1;
             }
         }
+        resolvePreviousBufferV2(rootEntity, wrapper, buffer);
+        paritallyFilledBus->pushArg(rootEntity);
+        return paritallyFilledBus;
     }
 
     CalcEntity *parseInternal(std::string &input, int *offset, CalcEntity *rootEntity, CalcFunction *currentFunction, bool *fromBracket)
@@ -177,11 +389,12 @@ private:
                 {
                     ++(*offset);
                     rt = parseInternal(input, offset, nullptr, nullptr, &b);
-                    if(x1) {
+                    if (x1)
+                    {
                         pre->pushArg(rt);
                     }
                 }
-                if(!x1)
+                if (!x1)
                 {
                     if (currentFunction != nullptr)
                     {
