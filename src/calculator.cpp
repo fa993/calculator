@@ -13,6 +13,13 @@ enum MatchResult
     OPERATION_NOT_MATCH
 };
 
+enum ParseMode
+{
+    MODE_SUM,
+    MODE_PRODUCT,
+    MODE_BRACKET
+};
+
 class Calculator
 {
 private:
@@ -20,7 +27,7 @@ private:
 
     CalcFunctionRegistry *registry;
     std::map<std::string, CalcVariable *> vars;
-    std::map<CalcVariable*, CalcEntity*> values;
+    std::map<CalcVariable *, CalcEntity *> values;
 
 public:
     Calculator()
@@ -55,10 +62,16 @@ public:
         return ans;
     }
 
-    CalcEntity *parseExp(std::string &input)
+    // CalcEntity *parseExp(std::string &input)
+    // {
+    //     int x = 0;
+    //     return parseBracketBus(input, &x, nullptr);
+    // }
+
+    CalcEntity *parseExpV2(std::string &input)
     {
         int x = 0;
-        return parseBracketBus(input, &x, nullptr);
+        return parseBus(input, &x, nullptr, nullptr, MODE_BRACKET);
     }
 
 private:
@@ -240,7 +253,7 @@ private:
         }
     }
 
-    MatchResult defaultOperations(char x, bool *fromBracket, std::string &input,std::string &buffer, int *offset)
+    MatchResult defaultOperations(char x, bool *fromBracket, std::string &input, std::string &buffer, int *offset)
     {
         if (x == ' ')
         {
@@ -276,12 +289,25 @@ private:
         }
     }
 
-    CalcEntity *parseAddBus(std::string &input, int *offset, CalcEntity *firstArg, bool *fromBracket)
+    CalcEntity *parseBus(std::string &input, int *offset, CalcEntity *firstArg, bool *fromBracket, ParseMode mode)
     {
-        CalcFunction *addBus = new CalcSumBus();
+        CalcFunction *bus = nullptr;
+        CalcEntity *lastEntity = nullptr;
+        if (mode == MODE_SUM)
+        {
+            bus = new CalcSumBus();
+        }
+        else if (mode == MODE_PRODUCT)
+        {
+            bus = new CalcProductBus();
+        }
+        else if (mode == MODE_BRACKET)
+        {
+            //DO NOTHING
+        }
         if (firstArg != nullptr)
         {
-            addBus->pushArg(firstArg);
+            bus->pushArg(firstArg);
         }
         std::string buffer;
         bool invFlag = false;
@@ -289,53 +315,170 @@ private:
         // for (std::string::const_iterator x = input.cbegin() + (*offset); x != input.end(); ++x, ++(*offset))
         {
             char x = input[*offset];
-            MatchResult rs = defaultOperations(x, fromBracket, input, buffer, offset);
-            if (rs == OPERATION_BREAK)
+            if (x == ' ')
             {
-                break;
-            }
-            else if (rs == OPERATION_CONTINUE)
-            {
+                //ignore
                 continue;
             }
-            if (x == '+')
+            else if (x == '+')
             {
                 //this is us
-                if (!buffer.empty())
+                if (mode == MODE_SUM)
                 {
-                    pushToBus(invFlag, addBus, consumeEntityFromBuffer(buffer), new CalcAdditiveInverse());
+                    if (!buffer.empty())
+                    {
+                        pushToBus(invFlag, bus, consumeEntityFromBuffer(buffer), new CalcAdditiveInverse());
+                    }
+                    else
+                    {
+                        //ignore
+                    }
+                    invFlag = false;
                 }
-                else
+                else if (mode == MODE_PRODUCT)
                 {
-                    //ignore
+                    (*offset)--;
+                    if (!buffer.empty())
+                    {
+                        pushToBus(invFlag, bus, consumeEntityFromBuffer(buffer), new CalcMultiplicativeInverse());
+                    }
+                    break;
                 }
-                invFlag = false;
+                else if (mode == MODE_BRACKET)
+                {
+                    if (!buffer.empty())
+                    {
+                        return parseBus(input, offset, consumeEntityFromBuffer(buffer), fromBracket, MODE_SUM);
+                    }
+                    else if (lastEntity != nullptr)
+                    {
+                        return parseBus(input, offset, consumeEntityFromBuffer(buffer), fromBracket, MODE_SUM);
+                    }
+                    else
+                    {
+                        //act as prefix to number
+                        buffer.push_back(x);
+                    }
+                }
             }
             else if (x == '-')
             {
-                //us but with inverse
-                if (!buffer.empty())
+                if (mode == MODE_SUM)
                 {
-                    pushToBus(invFlag, addBus, consumeEntityFromBuffer(buffer), new CalcAdditiveInverse());
+                    //us but with inverse
+                    if (!buffer.empty())
+                    {
+                        pushToBus(invFlag, bus, consumeEntityFromBuffer(buffer), new CalcAdditiveInverse());
+                    }
+                    else
+                    {
+                        //ignore
+                    }
+                    invFlag = true;
                 }
-                else
+                else if (mode == MODE_PRODUCT)
                 {
-                    //ignore
+                    (*offset)--;
+                    if (!buffer.empty())
+                    {
+                        pushToBus(invFlag, bus, consumeEntityFromBuffer(buffer), new CalcMultiplicativeInverse());
+                    }
+                    break;
                 }
-                invFlag = true;
+                else if (mode == MODE_BRACKET)
+                {
+                    if (!buffer.empty())
+                    {
+                        return parseBus(input, offset, consumeEntityFromBuffer(buffer), fromBracket, MODE_SUM);
+                    }
+                    else if (lastEntity != nullptr)
+                    {
+                        return parseBus(input, offset, lastEntity, fromBracket, MODE_SUM);
+                    }
+                    else
+                    {
+                        //act as prefix to number
+                        buffer.push_back(x);
+                    }
+                }
             }
             else if (x == '*')
             {
-                (*offset)++;
-                addBus->pushArg(parseMultiplyBus(input, offset, consumeEntityFromBuffer(buffer), fromBracket));
+                if (mode == MODE_SUM)
+                {
+                    (*offset)++;
+                    bus->pushArg(parseBus(input, offset, consumeEntityFromBuffer(buffer), fromBracket, MODE_PRODUCT));
+                }
+                else if (mode == MODE_PRODUCT)
+                {
+                    if (!buffer.empty())
+                    {
+                        pushToBus(invFlag, bus, consumeEntityFromBuffer(buffer), new CalcMultiplicativeInverse());
+                    }
+                    else
+                    {
+                        //ignore
+                    }
+                    invFlag = false;
+                }
+                else if (mode == MODE_BRACKET)
+                {
+                    if (!buffer.empty())
+                    {
+                        CalcEntity *mu = parseBus(input, offset, consumeEntityFromBuffer(buffer), fromBracket, MODE_PRODUCT);
+                        return parseBus(input, offset, mu, fromBracket, MODE_SUM);
+                    }
+                    else if (lastEntity != nullptr)
+                    {
+                        CalcEntity *mu = parseBus(input, offset, lastEntity, fromBracket, MODE_PRODUCT);
+                        return parseBus(input, offset, mu, fromBracket, MODE_SUM);
+                    }
+                    else
+                    {
+                        throw "Syntax Error";
+                    }
+                }
             }
             else if (x == '/')
             {
-                //but with twist
-                (*offset)++;
-                CalcFunction *f1 = new CalcMultiplicativeInverse();
-                f1->pushArg(consumeEntityFromBuffer(buffer));
-                addBus->pushArg(parseMultiplyBus(input, offset, f1, fromBracket));
+                if (mode == MODE_SUM)
+                {
+                    //but with twist
+                    (*offset)++;
+                    CalcFunction *f1 = new CalcMultiplicativeInverse();
+                    f1->pushArg(consumeEntityFromBuffer(buffer));
+                    bus->pushArg(parseBus(input, offset, f1, fromBracket, MODE_PRODUCT));
+                }
+                else if (mode == MODE_PRODUCT)
+                {
+                    //but with twist
+                    if (!buffer.empty())
+                    {
+                        pushToBus(invFlag, bus, consumeEntityFromBuffer(buffer), new CalcMultiplicativeInverse());
+                    }
+                    else
+                    {
+                        //ignore
+                    }
+                    invFlag = true;
+                }
+                else if (mode == MODE_BRACKET)
+                {
+                    if (!buffer.empty())
+                    {
+                        CalcEntity *mu = parseBus(input, offset, consumeEntityFromBuffer(buffer), fromBracket, MODE_PRODUCT);
+                        return parseBus(input, offset, mu, fromBracket, MODE_SUM);
+                    }
+                    else if (lastEntity != nullptr)
+                    {
+                        CalcEntity *mu = parseBus(input, offset, lastEntity, fromBracket, MODE_PRODUCT);
+                        return parseBus(input, offset, mu, fromBracket, MODE_SUM);
+                    }
+                    else
+                    {
+                        throw "Syntax Error";
+                    }
+                }
             }
             else if (x == '(')
             {
@@ -350,7 +493,7 @@ private:
                 CalcEntity *rt = nullptr;
                 do
                 {
-                    rt = parseBracketBus(input, offset, &b);
+                    rt = parseBus(input, offset, nullptr, &b, MODE_BRACKET);
                     if (pre != nullptr)
                     {
                         pre->pushArg(rt);
@@ -360,185 +503,343 @@ private:
                 {
                     rt = pre;
                 }
-                pushToBus(invFlag, addBus, rt, new CalcAdditiveInverse());
+                if (mode == MODE_SUM)
+                {
+                    pushToBus(invFlag, bus, rt, new CalcAdditiveInverse());
+                }
+                else if (mode == MODE_PRODUCT)
+                {
+                    pushToBus(invFlag, bus, rt, new CalcMultiplicativeInverse());
+                }
+                else if (mode == MODE_BRACKET)
+                {
+                    lastEntity = rt;
+                }
             }
-        }
-        if (!buffer.empty())
-        {
-            pushToBus(invFlag, addBus, consumeEntityFromBuffer(buffer), new CalcAdditiveInverse());
-        }
-        return addBus;
-    }
-
-    CalcEntity *parseMultiplyBus(std::string &input, int *offset, CalcEntity *firstArg, bool *fromBracket)
-    {
-        CalcFunction *multiplyBus = new CalcProductBus();
-        if (firstArg != nullptr)
-        {
-            multiplyBus->pushArg(firstArg);
-        }
-        std::string buffer;
-        bool invFlag = false;
-        for (; (*offset) < input.size(); (*offset)++)
-        // for (std::string::const_iterator x = input.cbegin() + (*offset); x != input.end(); ++x, ++(*offset))
-        {
-            char x = input[*offset];
-            MatchResult rs = defaultOperations(x, fromBracket, input, buffer, offset);
-            if (rs == OPERATION_BREAK)
+            else if (x == ')')
             {
+                (*fromBracket) = true;
                 break;
             }
-            else if (rs == OPERATION_CONTINUE)
-            {
-                continue;
-            }
-            else if (x == '+' || x == '-')
-            {
-                (*offset)--;
-                if (!buffer.empty())
-                {
-                    pushToBus(invFlag, multiplyBus, consumeEntityFromBuffer(buffer), new CalcMultiplicativeInverse());
-                }
-                break;
-            }
-            else if (x == '*')
-            {
-                if (!buffer.empty())
-                {
-                    pushToBus(invFlag, multiplyBus, consumeEntityFromBuffer(buffer), new CalcMultiplicativeInverse());
-                }
-                else
-                {
-                    //ignore
-                }
-                invFlag = false;
-            }
-            else if (x == '/')
-            {
-                //but with twist
-                if (!buffer.empty())
-                {
-                    pushToBus(invFlag, multiplyBus, consumeEntityFromBuffer(buffer), new CalcMultiplicativeInverse());
-                }
-                else
-                {
-                    //ignore
-                }
-                invFlag = true;
-            }
-            else if (x == '(')
-            {
-                //pass recursive call inside
-                (*offset)++;
-                CalcFunction *pre = nullptr;
-                bool b = true;
-                if (!buffer.empty())
-                {
-                    pre = static_cast<CalcFunction *>(consumeEntityFromBuffer(buffer));
-                }
-                CalcEntity *rt = nullptr;
-                do
-                {
-                    rt = parseBracketBus(input, offset, &b);
-                    if (pre != nullptr)
-                    {
-                        pre->pushArg(rt);
-                    }
-                } while (!b);
-                if (pre != nullptr)
-                {
-                    rt = pre;
-                }
-                pushToBus(invFlag, multiplyBus, rt, new CalcMultiplicativeInverse());
-            }
-        }
-        if (!buffer.empty())
-        {
-            pushToBus(invFlag, multiplyBus, consumeEntityFromBuffer(buffer), new CalcMultiplicativeInverse());
-        }
-        return multiplyBus;
-    }
-
-    //3 + 4 * 9
-    //5 * 9
-    CalcEntity *parseBracketBus(std::string &input, int *offset, bool *fromBracket)
-    {
-        std::string buffer;
-        bool invFlag = false;
-        for (; (*offset) < input.size(); (*offset)++)
-        // for (std::string::const_iterator x = input.cbegin() + (*offset); x != input.end(); ++x, ++(*offset))
-        {
-            char x = input[*offset];
-            MatchResult rs = defaultOperations(x, fromBracket, input, buffer, offset);
-            if (rs == OPERATION_BREAK)
-            {
-                break;
-            }
-            else if (rs == OPERATION_CONTINUE)
-            {
-                continue;
-            }
-            if (x == '+' || x == '-')
-            {
-                if (!buffer.empty())
-                {
-                    return parseAddBus(input, offset, consumeEntityFromBuffer(buffer), fromBracket);
-                }
-                else
-                {
-                    //act as prefix to number
-                    buffer.push_back(x);
-                }
-            }
-            else if (x == '*' || x == '/')
-            {
-                if (!buffer.empty())
-                {
-                    CalcEntity *mu = parseMultiplyBus(input, offset, consumeEntityFromBuffer(buffer), fromBracket);
-                    return parseAddBus(input, offset, mu, fromBracket);
-                }
-                else
-                {
-                    throw "Syntax Error";
-                }
-            }
-            else if (x == '(')
+            else if (x == ',')
             {
                 (*offset)++;
-                CalcFunction *pre = nullptr;
-                bool b = true;
-                if (!buffer.empty())
-                {
-                    pre = static_cast<CalcFunction *>(consumeEntityFromBuffer(buffer));
-                }
-                CalcEntity *rt = nullptr;
-                do
-                {
-                    rt = parseBracketBus(input, offset, &b);
-                    if (pre != nullptr)
-                    {
-                        pre->pushArg(rt);
-                    }
-                } while (!b);
-                if (pre != nullptr)
-                {
-                    return pre;
-                }
-                else
-                {
-                    return rt;
-                }
+                (*fromBracket) = false;
+                break;
+            }
+            // else if(x == '=') {
+
+            //     a = consumeEntityFromBuffer(buffer);
+            //     values[] = parseBracketBus(input, offset, fromBracket);
+            //     return OPERATION_CONTINUE;
+            // }
+            else
+            {
+                buffer.push_back(x);
+                std::cout << buffer << std::endl;
+                continue;
             }
         }
-        if (buffer.empty())
+        if (mode == MODE_SUM)
         {
-            return nullptr;
+            if (!buffer.empty())
+            {
+                pushToBus(invFlag, bus, consumeEntityFromBuffer(buffer), new CalcAdditiveInverse());
+            }
+            return bus;
+        }
+        else if (mode == MODE_PRODUCT)
+        {
+            if (!buffer.empty())
+            {
+                pushToBus(invFlag, bus, consumeEntityFromBuffer(buffer), new CalcMultiplicativeInverse());
+            }
+            return bus;
+        }
+        else if (mode == MODE_BRACKET)
+        {
+            if (!buffer.empty())
+            {
+                return consumeEntityFromBuffer(buffer);
+            }
+            else if (lastEntity != nullptr)
+            {
+                return lastEntity;
+            }
+            else
+            {
+                return nullptr;
+            }
         }
         else
         {
-            return consumeEntityFromBuffer(buffer);
+            return nullptr;
         }
     }
+
+    // CalcEntity *parseAddBus(std::string &input, int *offset, CalcEntity *firstArg, bool *fromBracket)
+    // {
+    //     CalcFunction *addBus = new CalcSumBus();
+    //     if (firstArg != nullptr)
+    //     {
+    //         addBus->pushArg(firstArg);
+    //     }
+    //     std::string buffer;
+    //     bool invFlag = false;
+    //     for (; (*offset) < input.size(); (*offset)++)
+    //     // for (std::string::const_iterator x = input.cbegin() + (*offset); x != input.end(); ++x, ++(*offset))
+    //     {
+    //         char x = input[*offset];
+    //         MatchResult rs = defaultOperations(x, fromBracket, input, buffer, offset);
+    //         if (rs == OPERATION_BREAK)
+    //         {
+    //             break;
+    //         }
+    //         else if (rs == OPERATION_CONTINUE)
+    //         {
+    //             continue;
+    //         }
+    //         if (x == '+')
+    //         {
+    //             //this is us
+    //             if (!buffer.empty())
+    //             {
+    //                 pushToBus(invFlag, addBus, consumeEntityFromBuffer(buffer), new CalcAdditiveInverse());
+    //             }
+    //             else
+    //             {
+    //                 //ignore
+    //             }
+    //             invFlag = false;
+    //         }
+    //         else if (x == '-')
+    //         {
+    //             //us but with inverse
+    //             if (!buffer.empty())
+    //             {
+    //                 pushToBus(invFlag, addBus, consumeEntityFromBuffer(buffer), new CalcAdditiveInverse());
+    //             }
+    //             else
+    //             {
+    //                 //ignore
+    //             }
+    //             invFlag = true;
+    //         }
+    //         else if (x == '*')
+    //         {
+    //             (*offset)++;
+    //             addBus->pushArg(parseMultiplyBus(input, offset, consumeEntityFromBuffer(buffer), fromBracket));
+    //         }
+    //         else if (x == '/')
+    //         {
+    //             //but with twist
+    //             (*offset)++;
+    //             CalcFunction *f1 = new CalcMultiplicativeInverse();
+    //             f1->pushArg(consumeEntityFromBuffer(buffer));
+    //             addBus->pushArg(parseMultiplyBus(input, offset, f1, fromBracket));
+    //         }
+    //         else if (x == '(')
+    //         {
+    //             //pass recursive call inside
+    //             (*offset)++;
+    //             CalcFunction *pre = nullptr;
+    //             bool b = true;
+    //             if (!buffer.empty())
+    //             {
+    //                 pre = static_cast<CalcFunction *>(consumeEntityFromBuffer(buffer));
+    //             }
+    //             CalcEntity *rt = nullptr;
+    //             do
+    //             {
+    //                 rt = parseBracketBus(input, offset, &b);
+    //                 if (pre != nullptr)
+    //                 {
+    //                     pre->pushArg(rt);
+    //                 }
+    //             } while (!b);
+    //             if (pre != nullptr)
+    //             {
+    //                 rt = pre;
+    //             }
+    //             pushToBus(invFlag, addBus, rt, new CalcAdditiveInverse());
+    //         }
+    //     }
+    //     if (!buffer.empty())
+    //     {
+    //         pushToBus(invFlag, addBus, consumeEntityFromBuffer(buffer), new CalcAdditiveInverse());
+    //     }
+    //     return addBus;
+    // }
+
+    // CalcEntity *parseMultiplyBus(std::string &input, int *offset, CalcEntity *firstArg, bool *fromBracket)
+    // {
+    //     CalcFunction *multiplyBus = new CalcProductBus();
+    //     if (firstArg != nullptr)
+    //     {
+    //         multiplyBus->pushArg(firstArg);
+    //     }
+    //     std::string buffer;
+    //     bool invFlag = false;
+    //     for (; (*offset) < input.size(); (*offset)++)
+    //     // for (std::string::const_iterator x = input.cbegin() + (*offset); x != input.end(); ++x, ++(*offset))
+    //     {
+    //         char x = input[*offset];
+    //         MatchResult rs = defaultOperations(x, fromBracket, input, buffer, offset);
+    //         if (rs == OPERATION_BREAK)
+    //         {
+    //             break;
+    //         }
+    //         else if (rs == OPERATION_CONTINUE)
+    //         {
+    //             continue;
+    //         }
+    //         else if (x == '+' || x == '-')
+    //         {
+    //             (*offset)--;
+    //             if (!buffer.empty())
+    //             {
+    //                 pushToBus(invFlag, multiplyBus, consumeEntityFromBuffer(buffer), new CalcMultiplicativeInverse());
+    //             }
+    //             break;
+    //         }
+    //         else if (x == '*')
+    //         {
+    //             if (!buffer.empty())
+    //             {
+    //                 pushToBus(invFlag, multiplyBus, consumeEntityFromBuffer(buffer), new CalcMultiplicativeInverse());
+    //             }
+    //             else
+    //             {
+    //                 //ignore
+    //             }
+    //             invFlag = false;
+    //         }
+    //         else if (x == '/')
+    //         {
+    //             //but with twist
+    //             if (!buffer.empty())
+    //             {
+    //                 pushToBus(invFlag, multiplyBus, consumeEntityFromBuffer(buffer), new CalcMultiplicativeInverse());
+    //             }
+    //             else
+    //             {
+    //                 //ignore
+    //             }
+    //             invFlag = true;
+    //         }
+    //         else if (x == '(')
+    //         {
+    //             //pass recursive call inside
+    //             (*offset)++;
+    //             CalcFunction *pre = nullptr;
+    //             bool b = true;
+    //             if (!buffer.empty())
+    //             {
+    //                 pre = static_cast<CalcFunction *>(consumeEntityFromBuffer(buffer));
+    //             }
+    //             CalcEntity *rt = nullptr;
+    //             do
+    //             {
+    //                 rt = parseBracketBus(input, offset, &b);
+    //                 if (pre != nullptr)
+    //                 {
+    //                     pre->pushArg(rt);
+    //                 }
+    //             } while (!b);
+    //             if (pre != nullptr)
+    //             {
+    //                 rt = pre;
+    //             }
+    //             pushToBus(invFlag, multiplyBus, rt, new CalcMultiplicativeInverse());
+    //         }
+    //     }
+    //     if (!buffer.empty())
+    //     {
+    //         pushToBus(invFlag, multiplyBus, consumeEntityFromBuffer(buffer), new CalcMultiplicativeInverse());
+    //     }
+    //     return multiplyBus;
+    // }
+
+    // //3 + 4 * 9
+    // //5 * 9
+    // CalcEntity *parseBracketBus(std::string &input, int *offset, bool *fromBracket)
+    // {
+    //     std::string buffer;
+    //     bool invFlag = false;
+    //     for (; (*offset) < input.size(); (*offset)++)
+    //     // for (std::string::const_iterator x = input.cbegin() + (*offset); x != input.end(); ++x, ++(*offset))
+    //     {
+    //         char x = input[*offset];
+    //         MatchResult rs = defaultOperations(x, fromBracket, input, buffer, offset);
+    //         if (rs == OPERATION_BREAK)
+    //         {
+    //             break;
+    //         }
+    //         else if (rs == OPERATION_CONTINUE)
+    //         {
+    //             continue;
+    //         }
+    //         if (x == '+' || x == '-')
+    //         {
+    //             if (!buffer.empty())
+    //             {
+    //                 return parseAddBus(input, offset, consumeEntityFromBuffer(buffer), fromBracket);
+    //             }
+    //             else
+    //             {
+    //                 //act as prefix to number
+    //                 buffer.push_back(x);
+    //             }
+    //         }
+    //         else if (x == '*' || x == '/')
+    //         {
+    //             if (!buffer.empty())
+    //             {
+    //                 CalcEntity *mu = parseMultiplyBus(input, offset, consumeEntityFromBuffer(buffer), fromBracket);
+    //                 return parseAddBus(input, offset, mu, fromBracket);
+    //             }
+    //             else
+    //             {
+    //                 throw "Syntax Error";
+    //             }
+    //         }
+    //         else if (x == '(')
+    //         {
+    //             (*offset)++;
+    //             CalcFunction *pre = nullptr;
+    //             bool b = true;
+    //             if (!buffer.empty())
+    //             {
+    //                 pre = static_cast<CalcFunction *>(consumeEntityFromBuffer(buffer));
+    //             }
+    //             CalcEntity *rt = nullptr;
+    //             do
+    //             {
+    //                 rt = parseBracketBus(input, offset, &b);
+    //                 if (pre != nullptr)
+    //                 {
+    //                     pre->pushArg(rt);
+    //                 }
+    //             } while (!b);
+    //             if (pre != nullptr)
+    //             {
+    //                 return pre;
+    //             }
+    //             else
+    //             {
+    //                 return rt;
+    //             }
+    //         }
+    //     }
+    //     if (buffer.empty())
+    //     {
+    //         return nullptr;
+    //     }
+    //     else
+    //     {
+    //         return consumeEntityFromBuffer(buffer);
+    //     }
+    // }
 
     CalcEntity *parseInternalV2(std::string &input, int *offset, CalcEntity *rootEntity, bool inverse, CalcFunction *paritallyFilledBus, bool *fromBracket)
     {
@@ -856,7 +1157,7 @@ int main(int argc, char const *argv[])
             {
                 x.pop_back();
             }
-            CalcEntity *clc = r->parseExp(x);
+            CalcEntity *clc = r->parseExpV2(x);
             if (clc != nullptr)
             {
                 clc->simplify(args);
