@@ -26,6 +26,10 @@ public:
     {
         throw "Unimplemented Error";
     }
+
+    virtual ~CalcFunction() {
+        
+    }
 };
 
 class CalcStandardBinaryFunction : public CalcFunction
@@ -88,7 +92,6 @@ public:
         x1->simplify(args);
         if (x1->isCompletelySimplified())
         {
-            
             double v1 = x1->getValue();
             result = operate(v1);
             complete = true;
@@ -128,7 +131,7 @@ public:
     void simplify(std::map<std::string, double> &args)
     {
         bool all = true;
-        double aggregate = getInitialValue();
+        double aggregateValue = getInitialValue();
         std::vector<CalcEntity *> parsedArgs;
         for (int i = 0; i < arguments.size(); i++)
         {
@@ -138,7 +141,7 @@ public:
             {
                 double v1 = x1->getValue();
                 arguments[i] = new CalcEntity(v1);
-                aggregate = operate(aggregate, v1);
+                aggregateValue = aggregate(aggregateValue, v1);
             }
             else
             {
@@ -150,12 +153,12 @@ public:
         if (all)
         {
             complete = true;
-            result = aggregate;
+            result = aggregateValue;
         }
         else
         {
             complete = false;
-            parsedArgs.push_back(new CalcEntity(aggregate));
+            parsedArgs.push_back(new CalcEntity(aggregateValue));
             arguments = parsedArgs;
         }
     }
@@ -167,7 +170,7 @@ public:
 
     virtual double getInitialValue() = 0;
 
-    virtual double operate(double first, double second) = 0;
+    virtual double aggregate(double output, double next) = 0;
 };
 
 #endif

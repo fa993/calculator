@@ -78,8 +78,8 @@ public:
         return 1;
     }
 
-    double operate(double first, double second) {
-        return first * second;
+    double aggregate(double output, double first) {
+        return output * first;
     }
 
     double getPriority(){
@@ -112,8 +112,8 @@ public:
         return 0;
     }
 
-    double operate(double first, double second) {
-        return first + second;
+    double aggregate(double output, double first) {
+        return output + first;
     }
 
     double getPriority(){
@@ -150,11 +150,11 @@ public:
 
     CalcFunction* findFunction(std::string &name){
         if(name == "add") {
-            return new CalcSumFunction();
+            return new CalcSumBus();
         } else if(name == "subtract"){
             return new CalcDifferenceFunction();
         } else if(name == "multiply") {
-            return new CalcProductFunction();
+            return new CalcProductBus();
         } else if(name == "divide") {
             return new CalcDivisionFunction();
         }

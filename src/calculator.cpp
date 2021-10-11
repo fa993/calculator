@@ -6,6 +6,13 @@
 #include "calcfunction.cpp"
 #include "calcvariable.cpp"
 
+enum MatchResult
+{
+    OPERATION_CONTINUE,
+    OPERATION_BREAK,
+    OPERATION_NOT_MATCH
+};
+
 class Calculator
 {
 private:
@@ -13,6 +20,7 @@ private:
 
     CalcFunctionRegistry *registry;
     std::map<std::string, CalcVariable *> vars;
+    std::map<CalcVariable*, CalcEntity*> values;
 
 public:
     Calculator()
@@ -34,7 +42,8 @@ public:
         return ans;
     }
 
-    CalcEntity* parseV2(std::string &input) {
+    CalcEntity *parseV2(std::string &input)
+    {
         CalcEntity *ans;
         int x = 0;
         CalcEntity *rt;
@@ -44,6 +53,12 @@ public:
             rt = ans;
         }
         return ans;
+    }
+
+    CalcEntity *parseExp(std::string &input)
+    {
+        int x = 0;
+        return parseBracketBus(input, &x, nullptr);
     }
 
 private:
@@ -174,10 +189,15 @@ private:
         if (currentFunction != nullptr)
         {
             //resolve previous buffer
-
-            currentFunction->pushArg(consumeEntityFromBuffer(buffer));
-            rootEntity = currentFunction;
-
+            if (!buffer.empty())
+            {
+                currentFunction->pushArg(consumeEntityFromBuffer(buffer));
+                rootEntity = currentFunction;
+            }
+            else
+            {
+                rootEntity = currentFunction;
+            }
             currentFunction = nullptr;
         }
         else
@@ -206,13 +226,328 @@ private:
         }
     }
 
-    CalcEntity *parseInternalV2(std::string &input, int *offset, CalcEntity* rootEntity, bool inverse, CalcFunction *paritallyFilledBus, bool *fromBracket)
+    void pushToBus(bool invFlag, CalcFunction *addBus, CalcEntity *entity, CalcFunction *inverse)
+    {
+        if (invFlag)
+        {
+            inverse->pushArg(entity);
+            addBus->pushArg(inverse);
+        }
+        else
+        {
+            addBus->pushArg(entity);
+            delete inverse;
+        }
+    }
+
+    MatchResult defaultOperations(char x, bool *fromBracket, std::string &input,std::string &buffer, int *offset)
+    {
+        if (x == ' ')
+        {
+            //ignore
+            return OPERATION_CONTINUE;
+        }
+        else if (x == ')')
+        {
+            (*fromBracket) = true;
+            return OPERATION_BREAK;
+        }
+        else if (x == ',')
+        {
+            (*offset)++;
+            (*fromBracket) = false;
+            return OPERATION_BREAK;
+        }
+        // else if(x == '=') {
+
+        //     a = consumeEntityFromBuffer(buffer);
+        //     values[] = parseBracketBus(input, offset, fromBracket);
+        //     return OPERATION_CONTINUE;
+        // }
+        else if (x == '+' || x == '-' || x == '/' || x == '*')
+        {
+            return OPERATION_NOT_MATCH;
+        }
+        else
+        {
+            // std::cout << x << std::endl;
+            buffer.push_back(x);
+            return OPERATION_CONTINUE;
+        }
+    }
+
+    CalcEntity *parseAddBus(std::string &input, int *offset, CalcEntity *firstArg, bool *fromBracket)
+    {
+        CalcFunction *addBus = new CalcSumBus();
+        if (firstArg != nullptr)
+        {
+            addBus->pushArg(firstArg);
+        }
+        std::string buffer;
+        bool invFlag = false;
+        for (; (*offset) < input.size(); (*offset)++)
+        // for (std::string::const_iterator x = input.cbegin() + (*offset); x != input.end(); ++x, ++(*offset))
+        {
+            char x = input[*offset];
+            MatchResult rs = defaultOperations(x, fromBracket, input, buffer, offset);
+            if (rs == OPERATION_BREAK)
+            {
+                break;
+            }
+            else if (rs == OPERATION_CONTINUE)
+            {
+                continue;
+            }
+            if (x == '+')
+            {
+                //this is us
+                if (!buffer.empty())
+                {
+                    pushToBus(invFlag, addBus, consumeEntityFromBuffer(buffer), new CalcAdditiveInverse());
+                }
+                else
+                {
+                    //ignore
+                }
+                invFlag = false;
+            }
+            else if (x == '-')
+            {
+                //us but with inverse
+                if (!buffer.empty())
+                {
+                    pushToBus(invFlag, addBus, consumeEntityFromBuffer(buffer), new CalcAdditiveInverse());
+                }
+                else
+                {
+                    //ignore
+                }
+                invFlag = true;
+            }
+            else if (x == '*')
+            {
+                (*offset)++;
+                addBus->pushArg(parseMultiplyBus(input, offset, consumeEntityFromBuffer(buffer), fromBracket));
+            }
+            else if (x == '/')
+            {
+                //but with twist
+                (*offset)++;
+                CalcFunction *f1 = new CalcMultiplicativeInverse();
+                f1->pushArg(consumeEntityFromBuffer(buffer));
+                addBus->pushArg(parseMultiplyBus(input, offset, f1, fromBracket));
+            }
+            else if (x == '(')
+            {
+                //pass recursive call inside
+                (*offset)++;
+                CalcFunction *pre = nullptr;
+                bool b = true;
+                if (!buffer.empty())
+                {
+                    pre = static_cast<CalcFunction *>(consumeEntityFromBuffer(buffer));
+                }
+                CalcEntity *rt = nullptr;
+                do
+                {
+                    rt = parseBracketBus(input, offset, &b);
+                    if (pre != nullptr)
+                    {
+                        pre->pushArg(rt);
+                    }
+                } while (!b);
+                if (pre != nullptr)
+                {
+                    rt = pre;
+                }
+                pushToBus(invFlag, addBus, rt, new CalcAdditiveInverse());
+            }
+        }
+        if (!buffer.empty())
+        {
+            pushToBus(invFlag, addBus, consumeEntityFromBuffer(buffer), new CalcAdditiveInverse());
+        }
+        return addBus;
+    }
+
+    CalcEntity *parseMultiplyBus(std::string &input, int *offset, CalcEntity *firstArg, bool *fromBracket)
+    {
+        CalcFunction *multiplyBus = new CalcProductBus();
+        if (firstArg != nullptr)
+        {
+            multiplyBus->pushArg(firstArg);
+        }
+        std::string buffer;
+        bool invFlag = false;
+        for (; (*offset) < input.size(); (*offset)++)
+        // for (std::string::const_iterator x = input.cbegin() + (*offset); x != input.end(); ++x, ++(*offset))
+        {
+            char x = input[*offset];
+            MatchResult rs = defaultOperations(x, fromBracket, input, buffer, offset);
+            if (rs == OPERATION_BREAK)
+            {
+                break;
+            }
+            else if (rs == OPERATION_CONTINUE)
+            {
+                continue;
+            }
+            else if (x == '+' || x == '-')
+            {
+                (*offset)--;
+                if (!buffer.empty())
+                {
+                    pushToBus(invFlag, multiplyBus, consumeEntityFromBuffer(buffer), new CalcMultiplicativeInverse());
+                }
+                break;
+            }
+            else if (x == '*')
+            {
+                if (!buffer.empty())
+                {
+                    pushToBus(invFlag, multiplyBus, consumeEntityFromBuffer(buffer), new CalcMultiplicativeInverse());
+                }
+                else
+                {
+                    //ignore
+                }
+                invFlag = false;
+            }
+            else if (x == '/')
+            {
+                //but with twist
+                if (!buffer.empty())
+                {
+                    pushToBus(invFlag, multiplyBus, consumeEntityFromBuffer(buffer), new CalcMultiplicativeInverse());
+                }
+                else
+                {
+                    //ignore
+                }
+                invFlag = true;
+            }
+            else if (x == '(')
+            {
+                //pass recursive call inside
+                (*offset)++;
+                CalcFunction *pre = nullptr;
+                bool b = true;
+                if (!buffer.empty())
+                {
+                    pre = static_cast<CalcFunction *>(consumeEntityFromBuffer(buffer));
+                }
+                CalcEntity *rt = nullptr;
+                do
+                {
+                    rt = parseBracketBus(input, offset, &b);
+                    if (pre != nullptr)
+                    {
+                        pre->pushArg(rt);
+                    }
+                } while (!b);
+                if (pre != nullptr)
+                {
+                    rt = pre;
+                }
+                pushToBus(invFlag, multiplyBus, rt, new CalcMultiplicativeInverse());
+            }
+        }
+        if (!buffer.empty())
+        {
+            pushToBus(invFlag, multiplyBus, consumeEntityFromBuffer(buffer), new CalcMultiplicativeInverse());
+        }
+        return multiplyBus;
+    }
+
+    //3 + 4 * 9
+    //5 * 9
+    CalcEntity *parseBracketBus(std::string &input, int *offset, bool *fromBracket)
+    {
+        std::string buffer;
+        bool invFlag = false;
+        for (; (*offset) < input.size(); (*offset)++)
+        // for (std::string::const_iterator x = input.cbegin() + (*offset); x != input.end(); ++x, ++(*offset))
+        {
+            char x = input[*offset];
+            MatchResult rs = defaultOperations(x, fromBracket, input, buffer, offset);
+            if (rs == OPERATION_BREAK)
+            {
+                break;
+            }
+            else if (rs == OPERATION_CONTINUE)
+            {
+                continue;
+            }
+            if (x == '+' || x == '-')
+            {
+                if (!buffer.empty())
+                {
+                    return parseAddBus(input, offset, consumeEntityFromBuffer(buffer), fromBracket);
+                }
+                else
+                {
+                    //act as prefix to number
+                    buffer.push_back(x);
+                }
+            }
+            else if (x == '*' || x == '/')
+            {
+                if (!buffer.empty())
+                {
+                    CalcEntity *mu = parseMultiplyBus(input, offset, consumeEntityFromBuffer(buffer), fromBracket);
+                    return parseAddBus(input, offset, mu, fromBracket);
+                }
+                else
+                {
+                    throw "Syntax Error";
+                }
+            }
+            else if (x == '(')
+            {
+                (*offset)++;
+                CalcFunction *pre = nullptr;
+                bool b = true;
+                if (!buffer.empty())
+                {
+                    pre = static_cast<CalcFunction *>(consumeEntityFromBuffer(buffer));
+                }
+                CalcEntity *rt = nullptr;
+                do
+                {
+                    rt = parseBracketBus(input, offset, &b);
+                    if (pre != nullptr)
+                    {
+                        pre->pushArg(rt);
+                    }
+                } while (!b);
+                if (pre != nullptr)
+                {
+                    return pre;
+                }
+                else
+                {
+                    return rt;
+                }
+            }
+        }
+        if (buffer.empty())
+        {
+            return nullptr;
+        }
+        else
+        {
+            return consumeEntityFromBuffer(buffer);
+        }
+    }
+
+    CalcEntity *parseInternalV2(std::string &input, int *offset, CalcEntity *rootEntity, bool inverse, CalcFunction *paritallyFilledBus, bool *fromBracket)
     {
         //new strategy... use function bus instead of reursive objects
         std::string buffer;
         double proposedPriority = -1;
-        CalcFunction* wrapper = nullptr;
-        if(paritallyFilledBus != nullptr){
+        CalcFunction *wrapper = nullptr;
+        if (paritallyFilledBus != nullptr)
+        {
             checkForInverse(wrapper, inverse, paritallyFilledBus->getPriority());
         }
         for (; (*offset) < input.size(); (*offset)++)
@@ -254,10 +589,13 @@ private:
                 if (x1)
                 {
                     resolvePreviousBufferV2(rootEntity, wrapper, buffer);
-                    checkForInverse(wrapper, inverse, paritallyFilledBus->getPriority());
+                    if (paritallyFilledBus != nullptr)
+                    {
+                        checkForInverse(wrapper, inverse, paritallyFilledBus->getPriority());
+                    }
                     pre = static_cast<CalcFunction *>(rootEntity);
                     if (paritallyFilledBus != nullptr)
-                    {   
+                    {
                         paritallyFilledBus->pushArg(pre);
                     }
                     else
@@ -272,6 +610,10 @@ private:
                     if (x1)
                     {
                         pre->pushArg(rt);
+                    }
+                    else if (paritallyFilledBus != nullptr)
+                    {
+                        paritallyFilledBus->pushArg(rt);
                     }
                 }
                 if (!x1)
@@ -337,7 +679,8 @@ private:
                 else
                 {
                     paritallyFilledBus = registry->findBus(proposedPriority);
-                    if(!buffer.empty() || rootEntity != nullptr){
+                    if (!buffer.empty() || rootEntity != nullptr)
+                    {
                         resolvePreviousBufferV2(rootEntity, wrapper, buffer);
                         paritallyFilledBus->pushArg(rootEntity);
                     }
@@ -347,7 +690,8 @@ private:
             }
         }
         resolvePreviousBufferV2(rootEntity, wrapper, buffer);
-        if(paritallyFilledBus != nullptr) {
+        if (paritallyFilledBus != nullptr && rootEntity != nullptr)
+        {
             paritallyFilledBus->pushArg(rootEntity);
             rootEntity = paritallyFilledBus;
         }
@@ -506,9 +850,25 @@ int main(int argc, char const *argv[])
                 std::cout << "bye!" << std::endl;
                 break;
             }
-            CalcEntity *clc = r->parseV2(x);
-            clc->simplify(args);
-            std::cout << clc->getValue() << std::endl;
+            char last = x.back();
+            bool ls = last == ';';
+            if (ls)
+            {
+                x.pop_back();
+            }
+            CalcEntity *clc = r->parseExp(x);
+            if (clc != nullptr)
+            {
+                clc->simplify(args);
+                if (!ls)
+                {
+                    std::cout << clc->getValue() << std::endl;
+                }
+                else
+                {
+                    std::cout << "Ok" << std::endl;
+                }
+            }
         }
         catch (const char *msg)
         {
