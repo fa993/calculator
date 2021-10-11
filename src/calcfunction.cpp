@@ -78,8 +78,6 @@ class CalcUnaryFunction : public CalcFunction
 private:
     /* data */
 public:
-    CalcUnaryFunction();
-
     void simplify(std::map<std::string, double> &args)
     {
         if (arguments.size() != getArguementListLength())
@@ -126,7 +124,6 @@ class CalcFunctionBus : public CalcFunction
 private:
     /* data */
 public:
-    CalcFunctionBus();
 
     void simplify(std::map<std::string, double> &args)
     {

@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include "calcfunctionregistry.cpp"
+#include "calcfunction.cpp"
 #include "calcvariable.cpp"
 
 class Calculator
@@ -28,6 +29,18 @@ public:
         while (x < input.size())
         {
             ans = parseInternal(input, &x, rt, f, nullptr);
+            rt = ans;
+        }
+        return ans;
+    }
+
+    CalcEntity* parseV2(std::string &input) {
+        CalcEntity *ans;
+        int x = 0;
+        CalcEntity *rt;
+        while (x < input.size())
+        {
+            ans = parseInternalV2(input, &x, rt, nullptr, nullptr, nullptr);
             rt = ans;
         }
         return ans;
@@ -161,8 +174,10 @@ private:
         if (currentFunction != nullptr)
         {
             //resolve previous buffer
+
             currentFunction->pushArg(consumeEntityFromBuffer(buffer));
             rootEntity = currentFunction;
+
             currentFunction = nullptr;
         }
         else
@@ -191,13 +206,15 @@ private:
         }
     }
 
-    CalcEntity *parseInternalV2(std::string &input, int *offset, bool inverse, CalcFunction *paritallyFilledBus, bool *fromBracket)
+    CalcEntity *parseInternalV2(std::string &input, int *offset, CalcEntity* rootEntity, bool inverse, CalcFunction *paritallyFilledBus, bool *fromBracket)
     {
         //new strategy... use function bus instead of reursive objects
         std::string buffer;
-        CalcEntity *rootEntity = nullptr;
         double proposedPriority = -1;
-        CalcFunction* wrapper;
+        CalcFunction* wrapper = nullptr;
+        if(paritallyFilledBus != nullptr){
+            checkForInverse(wrapper, inverse, paritallyFilledBus->getPriority());
+        }
         for (; (*offset) < input.size(); (*offset)++)
         // for (std::string::const_iterator x = input.cbegin() + (*offset); x != input.end(); ++x, ++(*offset))
         {
@@ -251,7 +268,7 @@ private:
                 while (b)
                 {
                     ++(*offset);
-                    rt = parseInternalV2(input, offset, nullptr, nullptr, &b);
+                    rt = parseInternalV2(input, offset, nullptr, nullptr, nullptr, &b);
                     if (x1)
                     {
                         pre->pushArg(rt);
@@ -283,7 +300,7 @@ private:
             }
             else
             {
-                // std::cout << x << std::endl;
+                std::cout << x << std::endl;
                 buffer.push_back(x);
                 continue;
             }
@@ -313,23 +330,28 @@ private:
                         CalcFunction *newBus = registry->findBus(proposedPriority);
                         newBus->pushArg(rootEntity);
                         (*offset)++;
-                        rootEntity = parseInternalV2(input, offset, inverse, newBus, fromBracket);
+                        rootEntity = parseInternalV2(input, offset, nullptr, inverse, newBus, fromBracket);
                         paritallyFilledBus->pushArg(rootEntity);
                     }
                 }
                 else
                 {
                     paritallyFilledBus = registry->findBus(proposedPriority);
-                    resolvePreviousBufferV2(rootEntity, wrapper, buffer);
+                    if(!buffer.empty() || rootEntity != nullptr){
+                        resolvePreviousBufferV2(rootEntity, wrapper, buffer);
+                        paritallyFilledBus->pushArg(rootEntity);
+                    }
                     checkForInverse(wrapper, inverse, proposedPriority);
-                    paritallyFilledBus->pushArg(rootEntity);
                 }
                 proposedPriority = -1;
             }
         }
         resolvePreviousBufferV2(rootEntity, wrapper, buffer);
-        paritallyFilledBus->pushArg(rootEntity);
-        return paritallyFilledBus;
+        if(paritallyFilledBus != nullptr) {
+            paritallyFilledBus->pushArg(rootEntity);
+            rootEntity = paritallyFilledBus;
+        }
+        return rootEntity;
     }
 
     CalcEntity *parseInternal(std::string &input, int *offset, CalcEntity *rootEntity, CalcFunction *currentFunction, bool *fromBracket)
@@ -484,7 +506,7 @@ int main(int argc, char const *argv[])
                 std::cout << "bye!" << std::endl;
                 break;
             }
-            CalcEntity *clc = r->parse(x);
+            CalcEntity *clc = r->parseV2(x);
             clc->simplify(args);
             std::cout << clc->getValue() << std::endl;
         }

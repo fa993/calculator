@@ -74,8 +74,6 @@ private:
     /* data */
 public:
 
-    CalcProductBus();
-
     double getInitialValue() {
         return 1;
     }
@@ -95,8 +93,6 @@ class CalcMultiplicativeInverse : public CalcUnaryFunction
 private:
     /* data */
 public:
-    CalcMultiplicativeInverse();
-
     double operate(double first) {
         return 1 / first;
     }
@@ -111,8 +107,6 @@ class CalcSumBus : public CalcFunctionBus
 private:
     /* data */
 public:
-
-    CalcSumBus();
 
     double getInitialValue() {
         return 0;
@@ -133,7 +127,6 @@ class CalcAdditiveInverse : public CalcUnaryFunction
 private:
     /* data */
 public:
-    CalcAdditiveInverse();
 
     double operate(double first) {
         return -first;
