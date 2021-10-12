@@ -36,7 +36,7 @@ class CalcStandardBinaryFunction : public CalcFunction
 {
 
 public:
-    void simplify(std::map<std::string, double> &args)
+    void simplify(std::map<std::string, CalcEntity*> &args)
     {
         if (arguments.size() != getArguementListLength())
         {
@@ -82,7 +82,7 @@ class CalcUnaryFunction : public CalcFunction
 private:
     /* data */
 public:
-    void simplify(std::map<std::string, double> &args)
+    void simplify(std::map<std::string, CalcEntity*> &args)
     {
         if (arguments.size() != getArguementListLength())
         {
@@ -128,7 +128,7 @@ private:
     /* data */
 public:
 
-    void simplify(std::map<std::string, double> &args)
+    void simplify(std::map<std::string, CalcEntity*> &args)
     {
         bool all = true;
         double aggregateValue = getInitialValue();
@@ -168,9 +168,20 @@ public:
         throw "Unsupported Error";
     }
 
+    CalcEntity* clone() {
+        CalcFunction* sf = getNewInstance();
+        for(std::vector<CalcEntity*>::const_iterator x = arguments.cbegin(); x != arguments.cend(); ++x) {
+            sf->pushArg((*x)->clone());
+        }
+        return sf;
+    }
+
     virtual double getInitialValue() = 0;
 
     virtual double aggregate(double output, double next) = 0;
+    
+    virtual CalcFunction* getNewInstance() = 0;
+
 };
 
 #endif

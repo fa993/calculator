@@ -12,6 +12,12 @@ protected:
     bool complete;
     double result;
 
+private:
+    CalcEntity(bool comp, double res) {
+        complete = comp;
+        result = res;
+    }
+
 public:
     CalcEntity() {
         result = 0;
@@ -24,7 +30,7 @@ public:
         complete = true;
     }
 
-    virtual void simplify(std::map<std::string, double> &args)
+    virtual void simplify(std::map<std::string, CalcEntity*> &args)
     {
     }
 
@@ -36,6 +42,10 @@ public:
     double getValue()
     {
         return result;
+    }
+
+    virtual CalcEntity* clone() {
+        return new CalcEntity(complete, result);
     }
 };
 

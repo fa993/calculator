@@ -27,27 +27,29 @@ private:
 
     CalcFunctionRegistry *registry;
     std::map<std::string, CalcVariable *> vars;
-    std::map<CalcVariable *, CalcEntity *> values;
 
 public:
+
+    std::map<std::string, CalcEntity*> args;
+
     Calculator()
     {
         registry = new CalcFunctionRegistry;
     }
 
-    CalcEntity *parse(std::string &input)
-    {
-        CalcEntity *ans;
-        int x = 0;
-        CalcFunction *f = nullptr;
-        CalcEntity *rt;
-        while (x < input.size())
-        {
-            ans = parseInternal(input, &x, rt, f, nullptr);
-            rt = ans;
-        }
-        return ans;
-    }
+    // CalcEntity *parse(std::string &input)
+    // {
+    //     CalcEntity *ans;
+    //     int x = 0;
+    //     CalcFunction *f = nullptr;
+    //     CalcEntity *rt;
+    //     while (x < input.size())
+    //     {
+    //         ans = parseInternal(input, &x, rt, f, nullptr);
+    //         rt = ans;
+    //     }
+    //     return ans;
+    // }
 
     CalcEntity *parseV2(std::string &input)
     {
@@ -137,7 +139,11 @@ private:
                         fn->pushArg(ret);
                         for (int f1 = 1; f1 < buffer.size(); f1++)
                         {
-                            fn->pushArg(putIfAbsent(buffer[f1], vars));
+                            if(isAlpha(buffer[f1])) {
+                                fn->pushArg(putIfAbsent(buffer[f1], vars));
+                            } else {
+                                fn->pushArg(new CalcEntity(buffer[f1] - '0'));
+                            }
                         }
                         ret = fn;
                     }
@@ -527,16 +533,23 @@ private:
                 (*fromBracket) = false;
                 break;
             }
-            // else if(x == '=') {
-
-            //     a = consumeEntityFromBuffer(buffer);
-            //     values[] = parseBracketBus(input, offset, fromBracket);
-            //     return OPERATION_CONTINUE;
-            // }
+            else if(x == '=') {
+                CalcVariable* x1 = static_cast<CalcVariable*>(consumeEntityFromBuffer(buffer));
+                (*offset)++;
+                CalcEntity* nextOne = parseBus(input, offset, nullptr, fromBracket, MODE_BRACKET);
+                args.insert(std::pair<std::string, CalcEntity*>(x1->getName(), nextOne));
+                if(mode == MODE_SUM) {
+                    pushToBus(invFlag, bus, nextOne, new CalcAdditiveInverse());
+                } else if(mode == MODE_PRODUCT) {
+                    pushToBus(invFlag, bus, nextOne, new CalcMultiplicativeInverse());
+                } else if(mode == MODE_BRACKET) {
+                    lastEntity = nextOne;
+                }
+            }
             else
             {
                 buffer.push_back(x);
-                std::cout << buffer << std::endl;
+                // std::cout << buffer << std::endl;
                 continue;
             }
         }
@@ -999,147 +1012,146 @@ private:
         return rootEntity;
     }
 
-    CalcEntity *parseInternal(std::string &input, int *offset, CalcEntity *rootEntity, CalcFunction *currentFunction, bool *fromBracket)
-    {
-        std::string buffer;
-        CalcFunction *localVar = nullptr;
-        for (; (*offset) < input.size(); (*offset)++)
-        // for (std::string::const_iterator x = input.cbegin() + (*offset); x != input.end(); ++x, ++(*offset))
-        {
-            char x = input[*offset];
-            //new strategy... recurse on precedence change;
-            //3 + 2 * 7
-            //3 + 2 * 7 - 6
-            if (x == ' ')
-            {
-                //ignore
-                continue;
-            }
-            else if (x == '+')
-            {
-                localVar = new CalcSumFunction();
-            }
-            else if (x == '-')
-            {
-                localVar = new CalcDifferenceFunction();
-            }
-            else if (x == '*')
-            {
-                localVar = new CalcProductFunction();
-            }
-            else if (x == '/')
-            {
-                localVar = new CalcDivisionFunction();
-            }
-            else if (x == '(')
-            {
-                //pass recursive call inside
-                bool b = true;
-                CalcEntity *rt;
-                CalcFunction *pre;
-                bool x1 = !buffer.empty();
-                if (x1)
-                {
-                    pre = static_cast<CalcFunction *>(consumeEntityFromBuffer(buffer));
-                    if (currentFunction != nullptr)
-                    {
-                        currentFunction->pushArg(pre);
-                        rootEntity = currentFunction;
-                        currentFunction = nullptr;
-                    }
-                    else
-                    {
-                        rootEntity = pre;
-                    }
-                }
-                while (b)
-                {
-                    ++(*offset);
-                    rt = parseInternal(input, offset, nullptr, nullptr, &b);
-                    if (x1)
-                    {
-                        pre->pushArg(rt);
-                    }
-                }
-                if (!x1)
-                {
-                    if (currentFunction != nullptr)
-                    {
-                        currentFunction->pushArg(rt);
-                        rootEntity = currentFunction;
-                        currentFunction = nullptr;
-                    }
-                    else
-                    {
-                        rootEntity = rt;
-                    }
-                }
-            }
-            else if (x == ')')
-            {
-                (*fromBracket) = false;
-                break;
-            }
-            else if (x == ',')
-            {
-                //add(4, 5)
-                //pass recursive call inside
-                break;
-            }
-            else
-            {
-                // std::cout << x << std::endl;
-                buffer.push_back(x);
-                continue;
-            }
-            if (localVar != nullptr)
-            {
-                if (currentFunction == nullptr)
-                {
-                    resolvePreviousBuffer(rootEntity, currentFunction, buffer);
-                    currentFunction = localVar;
-                    currentFunction->pushArg(rootEntity);
-                }
-                else
-                {
-                    int f = currentFunction->getPriority() - localVar->getPriority();
-                    if (f == 0)
-                    {
-                        resolvePreviousBuffer(rootEntity, currentFunction, buffer);
-                        currentFunction = localVar;
-                        currentFunction->pushArg(rootEntity);
-                    }
-                    else if (f > 0)
-                    {
-                        //recurse
-                        // parse()
-                        //TODO
-                        localVar->pushArg(consumeEntityFromBuffer(buffer));
-                        ++(*offset);
-                        CalcEntity *rt = parseInternal(input, offset, nullptr, localVar, fromBracket);
-                        currentFunction->pushArg(rt);
-                        rootEntity = currentFunction;
-                        currentFunction = nullptr;
-                    }
-                    else if (f < 0)
-                    {
-                        (*offset)--;
-                        break;
-                    }
-                }
-                localVar = nullptr;
-            }
-        }
-        resolvePreviousBuffer(rootEntity, currentFunction, buffer);
-        return rootEntity;
-    }
+    // CalcEntity *parseInternal(std::string &input, int *offset, CalcEntity *rootEntity, CalcFunction *currentFunction, bool *fromBracket)
+    // {
+    //     std::string buffer;
+    //     CalcFunction *localVar = nullptr;
+    //     for (; (*offset) < input.size(); (*offset)++)
+    //     // for (std::string::const_iterator x = input.cbegin() + (*offset); x != input.end(); ++x, ++(*offset))
+    //     {
+    //         char x = input[*offset];
+    //         //new strategy... recurse on precedence change;
+    //         //3 + 2 * 7
+    //         //3 + 2 * 7 - 6
+    //         if (x == ' ')
+    //         {
+    //             //ignore
+    //             continue;
+    //         }
+    //         else if (x == '+')
+    //         {
+    //             localVar = new CalcSumFunction();
+    //         }
+    //         else if (x == '-')
+    //         {
+    //             localVar = new CalcDifferenceFunction();
+    //         }
+    //         else if (x == '*')
+    //         {
+    //             localVar = new CalcProductFunction();
+    //         }
+    //         else if (x == '/')
+    //         {
+    //             localVar = new CalcDivisionFunction();
+    //         }
+    //         else if (x == '(')
+    //         {
+    //             //pass recursive call inside
+    //             bool b = true;
+    //             CalcEntity *rt;
+    //             CalcFunction *pre;
+    //             bool x1 = !buffer.empty();
+    //             if (x1)
+    //             {
+    //                 pre = static_cast<CalcFunction *>(consumeEntityFromBuffer(buffer));
+    //                 if (currentFunction != nullptr)
+    //                 {
+    //                     currentFunction->pushArg(pre);
+    //                     rootEntity = currentFunction;
+    //                     currentFunction = nullptr;
+    //                 }
+    //                 else
+    //                 {
+    //                     rootEntity = pre;
+    //                 }
+    //             }
+    //             while (b)
+    //             {
+    //                 ++(*offset);
+    //                 rt = parseInternal(input, offset, nullptr, nullptr, &b);
+    //                 if (x1)
+    //                 {
+    //                     pre->pushArg(rt);
+    //                 }
+    //             }
+    //             if (!x1)
+    //             {
+    //                 if (currentFunction != nullptr)
+    //                 {
+    //                     currentFunction->pushArg(rt);
+    //                     rootEntity = currentFunction;
+    //                     currentFunction = nullptr;
+    //                 }
+    //                 else
+    //                 {
+    //                     rootEntity = rt;
+    //                 }
+    //             }
+    //         }
+    //         else if (x == ')')
+    //         {
+    //             (*fromBracket) = false;
+    //             break;
+    //         }
+    //         else if (x == ',')
+    //         {
+    //             //add(4, 5)
+    //             //pass recursive call inside
+    //             break;
+    //         }
+    //         else
+    //         {
+    //             // std::cout << x << std::endl;
+    //             buffer.push_back(x);
+    //             continue;
+    //         }
+    //         if (localVar != nullptr)
+    //         {
+    //             if (currentFunction == nullptr)
+    //             {
+    //                 resolvePreviousBuffer(rootEntity, currentFunction, buffer);
+    //                 currentFunction = localVar;
+    //                 currentFunction->pushArg(rootEntity);
+    //             }
+    //             else
+    //             {
+    //                 int f = currentFunction->getPriority() - localVar->getPriority();
+    //                 if (f == 0)
+    //                 {
+    //                     resolvePreviousBuffer(rootEntity, currentFunction, buffer);
+    //                     currentFunction = localVar;
+    //                     currentFunction->pushArg(rootEntity);
+    //                 }
+    //                 else if (f > 0)
+    //                 {
+    //                     //recurse
+    //                     // parse()
+    //                     //TODO
+    //                     localVar->pushArg(consumeEntityFromBuffer(buffer));
+    //                     ++(*offset);
+    //                     CalcEntity *rt = parseInternal(input, offset, nullptr, localVar, fromBracket);
+    //                     currentFunction->pushArg(rt);
+    //                     rootEntity = currentFunction;
+    //                     currentFunction = nullptr;
+    //                 }
+    //                 else if (f < 0)
+    //                 {
+    //                     (*offset)--;
+    //                     break;
+    //                 }
+    //             }
+    //             localVar = nullptr;
+    //         }
+    //     }
+    //     resolvePreviousBuffer(rootEntity, currentFunction, buffer);
+    //     return rootEntity;
+    // }
 };
 
 int main(int argc, char const *argv[])
 {
     Calculator *r = new Calculator();
     std::string x;
-    std::map<std::string, double> args;
     while (true)
     {
         try
@@ -1160,7 +1172,7 @@ int main(int argc, char const *argv[])
             CalcEntity *clc = r->parseExpV2(x);
             if (clc != nullptr)
             {
-                clc->simplify(args);
+                clc->simplify(r->args);
                 if (!ls)
                 {
                     std::cout << clc->getValue() << std::endl;

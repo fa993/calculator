@@ -4,70 +4,6 @@
 #include "calcfunction.cpp"
 #include <string>
 
-class CalcSumFunction : public CalcStandardBinaryFunction
-{
-private:
-    /* data */
-public:
-
-    double operate(double first, double second)
-    {
-        return first + second;
-    }
-
-    double getPriority() {
-        return 2;
-    }
-};
-
-class CalcDifferenceFunction : public CalcStandardBinaryFunction
-{
-private:
-    /* data */
-public:
-
-    double operate(double first, double second)
-    {
-        return first - second;
-    }
-
-    double getPriority() {
-        return 2;
-    }
-};
-
-class CalcProductFunction : public CalcStandardBinaryFunction
-{
-private:
-    /* data */
-public:
-
-    double operate(double first, double second)
-    {
-        return first * second;
-    }
-
-    double getPriority() {
-        return 1;
-    }
-};
-
-class CalcDivisionFunction : public CalcStandardBinaryFunction
-{
-private:
-    /* data */
-public:
-
-    double operate(double first, double second)
-    {
-        return first / second;
-    }
-
-    double getPriority() {
-        return 1;
-    }
-};
-
 class CalcProductBus : public CalcFunctionBus
 {
 private:
@@ -86,6 +22,10 @@ public:
         return 1;
     }
 
+    CalcFunction* getNewInstance() {
+        return new CalcProductBus();
+    }
+
 };
 
 class CalcMultiplicativeInverse : public CalcUnaryFunction 
@@ -99,6 +39,10 @@ public:
 
     double getPriority(){
         return 1;
+    }
+
+    CalcFunction* getNewInstance() {
+        return new CalcMultiplicativeInverse();
     }
 };
 
@@ -120,6 +64,10 @@ public:
         return 2;
     }
 
+    CalcFunction* getNewInstance() {
+        return new CalcSumBus();
+    }
+
 };
 
 class CalcAdditiveInverse : public CalcUnaryFunction
@@ -134,6 +82,10 @@ public:
 
     double getPriority(){
         return 2;
+    }
+
+    CalcFunction* getNewInstance() {
+        return new CalcAdditiveInverse();
     }
 };
 
@@ -151,12 +103,8 @@ public:
     CalcFunction* findFunction(std::string &name){
         if(name == "add") {
             return new CalcSumBus();
-        } else if(name == "subtract"){
-            return new CalcDifferenceFunction();
         } else if(name == "multiply") {
             return new CalcProductBus();
-        } else if(name == "divide") {
-            return new CalcDivisionFunction();
         }
         return nullptr;
     }

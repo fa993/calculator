@@ -17,20 +17,39 @@ public:
         variable = name;
     }
 
-    virtual void simplify(std::map<std::string, double> &args)
+    virtual void simplify(std::map<std::string, CalcEntity*> &args)
     {
-        std::map<std::string, double>::iterator it = args.find(variable);
+        std::map<std::string, CalcEntity*>::iterator it = args.find(variable);
         if (it != args.end())
         {
             //found
             complete = true;
-            result = it->second;
+            CalcEntity* val = it->second;
+            if(!val->isCompletelySimplified()) {
+                val->simplify(args);
+                if(val->isCompletelySimplified()) {
+                    result = val->getValue();
+                    args[variable] = new CalcEntity(result);
+                } else {
+                    complete = false;
+                }
+            } else {
+                result = val->getValue();
+            }
         }
         else
         {
             //not found
             complete = false;
         }
+    }
+
+    std::string getName() {
+        return variable;
+    }
+
+    CalcEntity* clone() {
+        return new CalcVariable(variable);
     }
 };
 
