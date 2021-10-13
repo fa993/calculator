@@ -130,7 +130,11 @@ private:
                 }
                 else
                 {
-                    ret = putIfAbsent(buffer[0], vars);
+                    if(isAlpha(buffer[0])) {
+                        ret = putIfAbsent(buffer[0], vars);
+                    } else  {
+                        ret = new CalcEntity(buffer[0] - '0');
+                    }
                     //xyz
                     //bit dirty but make multiplied element here
                     if (buffer.size() > 1)
@@ -144,6 +148,7 @@ private:
                             } else {
                                 fn->pushArg(new CalcEntity(buffer[f1] - '0'));
                             }
+                            // std::cout<< buffer[f1] << std::endl;
                         }
                         ret = fn;
                     }
@@ -537,7 +542,7 @@ private:
                 CalcVariable* x1 = static_cast<CalcVariable*>(consumeEntityFromBuffer(buffer));
                 (*offset)++;
                 CalcEntity* nextOne = parseBus(input, offset, nullptr, fromBracket, MODE_BRACKET);
-                args.insert(std::pair<std::string, CalcEntity*>(x1->getName(), nextOne));
+                args[x1->getName()] =  nextOne;
                 if(mode == MODE_SUM) {
                     pushToBus(invFlag, bus, nextOne, new CalcAdditiveInverse());
                 } else if(mode == MODE_PRODUCT) {
@@ -1148,10 +1153,20 @@ private:
     // }
 };
 
+std::map<std::string, CalcEntity*> cloneMap(std::map<std::string, CalcEntity*> &map) {
+    std::map<std::string, CalcEntity*> duplicate;
+    for(std::map<std::string, CalcEntity*>::const_iterator f = map.cbegin(); f != map.cend(); f++) {
+        duplicate.insert(std::make_pair<std::string, CalcEntity*>(f->first, f->second->clone()));
+    }
+    return duplicate;
+}
+
 int main(int argc, char const *argv[])
 {
     Calculator *r = new Calculator();
     std::string x;
+    std::map<std::string, CalcEntity*> noArgs;
+    std::map<std::string, CalcEntity*> dup;
     while (true)
     {
         try
@@ -1172,7 +1187,10 @@ int main(int argc, char const *argv[])
             CalcEntity *clc = r->parseExpV2(x);
             if (clc != nullptr)
             {
-                clc->simplify(r->args);
+                clc->simplify(noArgs);
+                clc = clc->clone();
+                dup = cloneMap(r->args);
+                clc->simplify(dup);
                 if (!ls)
                 {
                     std::cout << clc->getValue() << std::endl;

@@ -29,7 +29,7 @@ public:
                 val->simplify(args);
                 if(val->isCompletelySimplified()) {
                     result = val->getValue();
-                    args[variable] = new CalcEntity(result);
+                    // args[variable] = new CalcEntity(result);
                 } else {
                     complete = false;
                 }
