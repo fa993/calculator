@@ -6,13 +6,6 @@
 #include "calcfunction.cpp"
 #include "calcvariable.cpp"
 
-enum MatchResult
-{
-    OPERATION_CONTINUE,
-    OPERATION_BREAK,
-    OPERATION_NOT_MATCH
-};
-
 enum ParseMode
 {
     MODE_SUM,
@@ -108,16 +101,23 @@ private:
                     {
                         CalcFunction *fn = new CalcProductBus();
                         fn->pushArg(ret);
+                        bool isCompound = true;
                         for (int f1 = 1; f1 < buffer.size(); f1++)
                         {
                             if(isAlpha(buffer[f1])) {
                                 fn->pushArg(putIfAbsent(buffer[f1], vars));
                             } else {
-                                fn->pushArg(new CalcEntity(buffer[f1] - '0'));
+                                isCompound = false;
+                                break;
                             }
                             // std::cout<< buffer[f1] << std::endl;
                         }
-                        ret = fn;
+                        if(isCompound) {
+                            ret = fn;
+                        } else  {
+                            delete fn;
+                            ret = putIfAbsent(buffer, vars);
+                        }
                     }
                 }
             }
@@ -134,62 +134,6 @@ private:
         return ret;
     }
 
-    void resolvePreviousBuffer(CalcEntity *&rootEntity, CalcFunction *&currentFunction, std::string &buffer)
-    {
-        if (currentFunction != nullptr)
-        {
-            //resolve previous buffer
-            currentFunction->pushArg(consumeEntityFromBuffer(buffer));
-            rootEntity = currentFunction;
-        }
-        else
-        {
-            resolvePreviousBuffer(rootEntity, buffer);
-        }
-    }
-
-    void resolvePreviousBufferV2(CalcEntity *&rootEntity, CalcFunction *&currentFunction, std::string &buffer)
-    {
-        if (currentFunction != nullptr)
-        {
-            //resolve previous buffer
-            if (!buffer.empty())
-            {
-                currentFunction->pushArg(consumeEntityFromBuffer(buffer));
-                rootEntity = currentFunction;
-            }
-            else
-            {
-                rootEntity = currentFunction;
-            }
-            currentFunction = nullptr;
-        }
-        else
-        {
-            resolvePreviousBuffer(rootEntity, buffer);
-        }
-    }
-
-    void resolvePreviousBuffer(CalcEntity *&rootEntity, std::string &buffer)
-    {
-        if (!buffer.empty())
-        {
-            rootEntity = consumeEntityFromBuffer(buffer);
-        }
-        else if (rootEntity == nullptr)
-        {
-            throw "Syntax Error";
-        }
-    }
-
-    void checkForInverse(CalcFunction *&wrapper, bool inverse, double proposedPriority)
-    {
-        if (inverse)
-        {
-            wrapper = registry->findInverse(proposedPriority);
-        }
-    }
-
     void pushToBus(bool invFlag, CalcFunction *addBus, CalcEntity *entity, CalcFunction *inverse)
     {
         if (invFlag)
@@ -201,42 +145,6 @@ private:
         {
             addBus->pushArg(entity);
             delete inverse;
-        }
-    }
-
-    MatchResult defaultOperations(char x, bool *fromBracket, std::string &input, std::string &buffer, int *offset)
-    {
-        if (x == ' ')
-        {
-            //ignore
-            return OPERATION_CONTINUE;
-        }
-        else if (x == ')')
-        {
-            (*fromBracket) = true;
-            return OPERATION_BREAK;
-        }
-        else if (x == ',')
-        {
-            (*offset)++;
-            (*fromBracket) = false;
-            return OPERATION_BREAK;
-        }
-        // else if(x == '=') {
-
-        //     a = consumeEntityFromBuffer(buffer);
-        //     values[] = parseBracketBus(input, offset, fromBracket);
-        //     return OPERATION_CONTINUE;
-        // }
-        else if (x == '+' || x == '-' || x == '/' || x == '*')
-        {
-            return OPERATION_NOT_MATCH;
-        }
-        else
-        {
-            // std::cout << x << std::endl;
-            buffer.push_back(x);
-            return OPERATION_CONTINUE;
         }
     }
 

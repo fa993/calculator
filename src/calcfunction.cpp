@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 
+static const int INFINITE_ARGUEMENTS = -1;
+
 class CalcFunction : public CalcEntity
 {
 
@@ -15,16 +17,19 @@ protected:
 public:
     void pushArg(CalcEntity *arg)
     {
-        arguments.push_back(arg);
+        int f1 = getArguementListLength();
+        if(f1 == INFINITE_ARGUEMENTS || arguments.size() < f1) {
+            arguments.push_back(arg);
+        } else {
+            throw "Too many Arguements Error";
+        }
     }
 
     virtual int getArguementListLength() = 0;
 
-    virtual double getPriority() = 0;
-
     double getValue()
     {
-        throw "Unimplemented Error";
+        throw "Unsupported Error";
     }
 
     virtual ~CalcFunction() {
@@ -116,10 +121,6 @@ class CalcCustomBinaryFunction : public CalcStandardBinaryFunction
 private:
     /* data */
 public:
-    double getPriority()
-    {
-        return 0;
-    }
 };
 
 class CalcFunctionBus : public CalcFunction
@@ -165,7 +166,7 @@ public:
 
     int getArguementListLength()
     {
-        throw "Unsupported Error";
+        return INFINITE_ARGUEMENTS;
     }
 
     CalcEntity* clone() {

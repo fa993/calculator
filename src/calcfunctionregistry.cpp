@@ -18,10 +18,6 @@ public:
         return output * first;
     }
 
-    double getPriority(){
-        return 1;
-    }
-
     CalcFunction* getNewInstance() {
         return new CalcProductBus();
     }
@@ -35,10 +31,6 @@ private:
 public:
     double operate(double first) {
         return 1 / first;
-    }
-
-    double getPriority(){
-        return 1;
     }
 
     CalcFunction* getNewInstance() {
@@ -60,10 +52,6 @@ public:
         return output + first;
     }
 
-    double getPriority(){
-        return 2;
-    }
-
     CalcFunction* getNewInstance() {
         return new CalcSumBus();
     }
@@ -78,10 +66,6 @@ public:
 
     double operate(double first) {
         return -first;
-    }
-
-    double getPriority(){
-        return 2;
     }
 
     CalcFunction* getNewInstance() {
@@ -105,24 +89,6 @@ public:
             return new CalcSumBus();
         } else if(name == "multiply") {
             return new CalcProductBus();
-        }
-        return nullptr;
-    }
-
-    CalcFunction* findBus(double priority) {
-        if(priority == 2){
-            return new CalcSumBus();
-        } else if(priority == 1) {
-            return new CalcProductBus();
-        }
-        return nullptr;
-    }
-
-    CalcFunction* findInverse(double priority) {
-        if(priority == 2){
-            return new CalcAdditiveInverse();
-        } else if(priority == 1) {
-            return new CalcMultiplicativeInverse();
         }
         return nullptr;
     }
