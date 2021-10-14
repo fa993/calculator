@@ -22,6 +22,10 @@ public:
         return new CalcProductBus();
     }
 
+    std::string getConnecter() {
+        return "*";
+    }
+
 };
 
 class CalcMultiplicativeInverse : public CalcUnaryFunction 
@@ -36,6 +40,11 @@ public:
     CalcFunction* getNewInstance() {
         return new CalcMultiplicativeInverse();
     }
+
+    std::string toString() {
+        return "(1 / " + arguments.at(0)->toString() + ")";
+    }
+
 };
 
 class CalcSumBus : public CalcFunctionBus
@@ -56,6 +65,10 @@ public:
         return new CalcSumBus();
     }
 
+    std::string getConnecter() {
+        return "+";
+    }
+
 };
 
 class CalcAdditiveInverse : public CalcUnaryFunction
@@ -70,6 +83,10 @@ public:
 
     CalcFunction* getNewInstance() {
         return new CalcAdditiveInverse();
+    }
+
+    std::string toString() {
+        return "(-"  + arguments.at(0)->toString() + ")";
     }
 };
 

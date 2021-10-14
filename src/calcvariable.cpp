@@ -14,6 +14,7 @@ private:
 public:
     CalcVariable(std::string name)
     {
+        complete = false;
         variable = name;
     }
 
@@ -50,6 +51,14 @@ public:
 
     CalcEntity* clone() {
         return new CalcVariable(variable);
+    }
+
+    std::string toString() {
+        if(complete) {
+            return std::to_string(result);
+        } else {
+            return variable;
+        }
     }
 };
 

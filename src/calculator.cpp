@@ -211,7 +211,7 @@ private:
                     }
                     else if (lastEntity != nullptr)
                     {
-                        return parseBus(input, offset, consumeEntityFromBuffer(buffer), fromBracket, MODE_SUM);
+                        return parseBus(input, offset, lastEntity, fromBracket, MODE_SUM);
                     }
                     else
                     {
@@ -257,7 +257,7 @@ private:
                     else
                     {
                         //act as prefix to number
-                        buffer.push_back(x);
+                        return parseBus(input, offset, nullptr, fromBracket, MODE_SUM);
                     }
                 }
             }
@@ -392,11 +392,11 @@ private:
                 CalcEntity* nextOne = parseBus(input, offset, nullptr, fromBracket, MODE_BRACKET);
                 args[x1->getName()] =  nextOne;
                 if(mode == MODE_SUM) {
-                    pushToBus(invFlag, bus, nextOne, new CalcAdditiveInverse());
+                    pushToBus(invFlag, bus, x1, new CalcAdditiveInverse());
                 } else if(mode == MODE_PRODUCT) {
-                    pushToBus(invFlag, bus, nextOne, new CalcMultiplicativeInverse());
+                    pushToBus(invFlag, bus, x1, new CalcMultiplicativeInverse());
                 } else if(mode == MODE_BRACKET) {
-                    lastEntity = nextOne;
+                    lastEntity = x1;
                 }
             }
             else
@@ -479,17 +479,21 @@ int main(int argc, char const *argv[])
             if (clc != nullptr)
             {
                 clc->simplify(noArgs);
-                clc = clc->clone();
-                dup = cloneMap(r->args);
-                clc->simplify(dup);
+                if(!clc->isCompletelySimplified()) {
+                    clc = clc->clone();
+                    dup = cloneMap(r->args);
+                    clc->simplify(dup);
+                }
                 if (!ls)
                 {
-                    std::cout << clc->getValue() << std::endl;
+                    std::cout << clc->toString() << std::endl;
                 }
                 else
                 {
                     std::cout << "Ok" << std::endl;
                 }
+                // delete clc;
+                //figure out a way to delete map                
             }
         }
         catch (const char *msg)

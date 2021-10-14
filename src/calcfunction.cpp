@@ -2,6 +2,7 @@
 #define CALCFUNCTION_FA993
 
 #include "calcentity.cpp"
+#include <iostream>
 #include <map>
 #include <string>
 #include <vector>
@@ -18,9 +19,12 @@ public:
     void pushArg(CalcEntity *arg)
     {
         int f1 = getArguementListLength();
-        if(f1 == INFINITE_ARGUEMENTS || arguments.size() < f1) {
+        if (f1 == INFINITE_ARGUEMENTS || arguments.size() < f1)
+        {
             arguments.push_back(arg);
-        } else {
+        }
+        else
+        {
             throw "Too many Arguements Error";
         }
     }
@@ -32,8 +36,8 @@ public:
         throw "Unsupported Error";
     }
 
-    virtual ~CalcFunction() {
-        
+    virtual ~CalcFunction()
+    {
     }
 };
 
@@ -41,7 +45,7 @@ class CalcStandardBinaryFunction : public CalcFunction
 {
 
 public:
-    void simplify(std::map<std::string, CalcEntity*> &args)
+    void simplify(std::map<std::string, CalcEntity *> &args)
     {
         if (arguments.size() != getArguementListLength())
         {
@@ -87,7 +91,7 @@ class CalcUnaryFunction : public CalcFunction
 private:
     /* data */
 public:
-    void simplify(std::map<std::string, CalcEntity*> &args)
+    void simplify(std::map<std::string, CalcEntity *> &args)
     {
         if (arguments.size() != getArguementListLength())
         {
@@ -97,8 +101,7 @@ public:
         x1->simplify(args);
         if (x1->isCompletelySimplified())
         {
-            double v1 = x1->getValue();
-            result = operate(v1);
+            result = operate(x1->getValue());
             complete = true;
             arguments.clear();
         }
@@ -112,6 +115,15 @@ public:
     {
         return 1;
     }
+
+    CalcEntity *clone()
+    {
+        CalcFunction *fn = getNewInstance();
+        fn->pushArg(arguments[0]);
+        return fn;
+    }
+
+    virtual CalcFunction *getNewInstance() = 0;
 
     virtual double operate(double first) = 0;
 };
@@ -128,8 +140,7 @@ class CalcFunctionBus : public CalcFunction
 private:
     /* data */
 public:
-
-    void simplify(std::map<std::string, CalcEntity*> &args)
+    void simplify(std::map<std::string, CalcEntity *> &args)
     {
         bool all = true;
         double aggregateValue = getInitialValue();
@@ -141,7 +152,6 @@ public:
             if (x1->isCompletelySimplified())
             {
                 double v1 = x1->getValue();
-                arguments[i] = new CalcEntity(v1);
                 aggregateValue = aggregate(aggregateValue, v1);
             }
             else
@@ -151,15 +161,17 @@ public:
             }
         }
         arguments.clear();
+        complete = all;
         if (all)
         {
-            complete = true;
             result = aggregateValue;
         }
         else
         {
-            complete = false;
-            parsedArgs.push_back(new CalcEntity(aggregateValue));
+            if (aggregateValue != getInitialValue())
+            {
+                parsedArgs.insert(parsedArgs.begin(), new CalcEntity(aggregateValue));
+            }
             arguments = parsedArgs;
         }
     }
@@ -169,9 +181,11 @@ public:
         return INFINITE_ARGUEMENTS;
     }
 
-    CalcEntity* clone() {
-        CalcFunction* sf = getNewInstance();
-        for(std::vector<CalcEntity*>::const_iterator x = arguments.cbegin(); x != arguments.cend(); ++x) {
+    CalcEntity *clone()
+    {
+        CalcFunction *sf = getNewInstance();
+        for (std::vector<CalcEntity *>::const_iterator x = arguments.cbegin(); x != arguments.cend(); ++x)
+        {
             sf->pushArg((*x)->clone());
         }
         return sf;
@@ -180,9 +194,31 @@ public:
     virtual double getInitialValue() = 0;
 
     virtual double aggregate(double output, double next) = 0;
-    
-    virtual CalcFunction* getNewInstance() = 0;
 
+    virtual CalcFunction *getNewInstance() = 0;
+
+    virtual std::string getConnecter() = 0;
+
+    std::string toString()
+    {
+        std::string ret;
+        if (!complete)
+        {
+            if (arguments.size() > 0)
+            {
+                ret.append(arguments.at(0)->toString());
+            }
+            for (std::vector<CalcEntity *>::const_iterator x = arguments.cbegin() + 1; x != arguments.cend(); ++x)
+            {
+                ret.append(" " + getConnecter() + " " + (*x)->toString());
+            }
+            return ret;
+        }
+        else
+        {
+            return CalcEntity::toString();
+        }
+    }
 };
 
 #endif

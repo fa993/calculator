@@ -44,6 +44,10 @@ public:
         return result;
     }
 
+    virtual std::string toString() {
+        return std::to_string(getValue());
+    }
+
     virtual CalcEntity* clone() {
         return new CalcEntity(complete, result);
     }
