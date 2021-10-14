@@ -19,11 +19,11 @@ private:
     /* data */
 
     CalcFunctionRegistry *registry;
-    std::map<std::string, CalcVariable *> vars;
 
 public:
 
     std::map<std::string, CalcEntity*> args;
+    std::map<std::string, CalcVariable *> vars;
 
     Calculator()
     {
@@ -93,7 +93,7 @@ private:
                     if(isAlpha(buffer[0])) {
                         ret = putIfAbsent(buffer[0], vars);
                     } else  {
-                        ret = new CalcEntity(buffer[0] - '0');
+                        ret = new CalcValue(buffer[0] - '0');
                     }
                     //xyz
                     //bit dirty but make multiplied element here
@@ -128,7 +128,7 @@ private:
         }
         else
         {
-            ret = new CalcEntity(std::stod(buffer));
+            ret = new CalcValue(std::stod(buffer));
         }
         buffer.clear();
         return ret;
@@ -444,13 +444,13 @@ private:
     }
 };
 
-std::map<std::string, CalcEntity*> cloneMap(std::map<std::string, CalcEntity*> &map) {
-    std::map<std::string, CalcEntity*> duplicate;
-    for(std::map<std::string, CalcEntity*>::const_iterator f = map.cbegin(); f != map.cend(); f++) {
-        duplicate.insert(std::make_pair<std::string, CalcEntity*>(f->first, f->second->clone()));
-    }
-    return duplicate;
-}
+// std::map<std::string, CalcEntity*> cloneMap(std::map<std::string, CalcEntity*> &map) {
+//     std::map<std::string, CalcEntity*> duplicate;
+//     for(std::map<std::string, CalcEntity*>::const_iterator f = map.cbegin(); f != map.cend(); f++) {
+//         duplicate.insert(std::make_pair<std::string, CalcEntity*>(f->first, f->second->clone()));
+//     }
+//     return duplicate;
+// }
 
 int main(int argc, char const *argv[])
 {
@@ -478,20 +478,23 @@ int main(int argc, char const *argv[])
             CalcEntity *clc = r->parseExpV2(x);
             if (clc != nullptr)
             {
-                clc->simplify(noArgs);
-                if(!clc->isCompletelySimplified()) {
-                    clc = clc->clone();
-                    dup = cloneMap(r->args);
-                    clc->simplify(dup);
-                }
+                CalcEntity* nextNextOne = clc->simplify(r->args);
+                // if(!clc->isCompletelySimplified()) {
+                //     clc = clc->clone();
+                //     dup = cloneMap(r->args);
+                //     clc->simplify(dup);
+                // }
                 if (!ls)
                 {
-                    std::cout << clc->toString() << std::endl;
+                    std::cout << nextNextOne->toString() << std::endl;
                 }
                 else
                 {
                     std::cout << "Ok" << std::endl;
                 }
+                r->args.insert(std::make_pair<std::string, CalcEntity*>("last", nextNextOne));
+                r->vars.insert(std::make_pair<std::string, CalcVariable*>("last", new CalcVariable("last")));
+                delete clc;
                 // delete clc;
                 //figure out a way to delete map                
             }

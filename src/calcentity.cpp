@@ -6,51 +6,29 @@
 
 class CalcEntity
 {
-protected:
-    /* data */
-
-    bool complete;
-    double result;
-
-private:
-    CalcEntity(bool comp, double res) {
-        complete = comp;
-        result = res;
-    }
 
 public:
-    CalcEntity() {
-        result = 0;
-        complete = false;
+
+    virtual CalcEntity* simplify(std::map<std::string, CalcEntity*> &args) = 0;
+
+    virtual bool isCompletelySimplified() = 0;
+
+    double getValue() {
+        if(isCompletelySimplified()) {
+            return _value();
+        } else {
+            throw "Unsimplified Error";
+        }
     }
 
-    CalcEntity(double num)
-    {
-        result = num;
-        complete = true;
+    virtual double _value() = 0;
+
+    virtual std::string toString() = 0;
+
+    virtual ~CalcEntity() {
+        //TODO
     }
 
-    virtual void simplify(std::map<std::string, CalcEntity*> &args)
-    {
-    }
-
-    bool isCompletelySimplified()
-    {
-        return complete;
-    }
-
-    double getValue()
-    {
-        return result;
-    }
-
-    virtual std::string toString() {
-        return std::to_string(getValue());
-    }
-
-    virtual CalcEntity* clone() {
-        return new CalcEntity(complete, result);
-    }
 };
 
 #endif
