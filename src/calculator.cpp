@@ -458,6 +458,7 @@ int main(int argc, char const *argv[])
     std::string x;
     std::map<std::string, CalcEntity*> noArgs;
     std::map<std::string, CalcEntity*> dup;
+    r->vars["last"] =  new CalcVariable("last");
     while (true)
     {
         try
@@ -492,11 +493,8 @@ int main(int argc, char const *argv[])
                 {
                     std::cout << "Ok" << std::endl;
                 }
-                r->args.insert(std::make_pair<std::string, CalcEntity*>("last", nextNextOne));
-                r->vars.insert(std::make_pair<std::string, CalcVariable*>("last", new CalcVariable("last")));
-                delete clc;
+                r->args["last"] = nextNextOne;
                 // delete clc;
-                //figure out a way to delete map                
             }
         }
         catch (const char *msg)

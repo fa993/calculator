@@ -26,7 +26,7 @@ public:
             CalcEntity* val = it->second;
             if(!val->isCompletelySimplified()) {
                 CalcEntity* ret = val->simplify(args);
-                args[variable] = ret;
+                // args[variable] = ret;
                 return ret;
             } else {
                 return val;
