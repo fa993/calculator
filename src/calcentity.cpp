@@ -13,6 +13,10 @@ public:
 
     virtual bool isCompletelySimplified() = 0;
 
+    virtual double _value() = 0;
+
+    virtual std::string toString() = 0;
+
     double getValue() {
         if(isCompletelySimplified()) {
             return _value();
@@ -20,10 +24,6 @@ public:
             throw "Unsimplified Error";
         }
     }
-
-    virtual double _value() = 0;
-
-    virtual std::string toString() = 0;
 
     virtual ~CalcEntity() {
         //TODO
